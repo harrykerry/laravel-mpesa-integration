@@ -12,15 +12,15 @@ class MpesaDataFetchController extends Controller
     //
 
 
- /**
- * Fetches Mpesa confirmation records that have not been previously fetched.
- *
- * @param \Illuminate\Http\Request $request The incoming HTTP request.
- * 
- * @return \Illuminate\Http\JsonResponse A JSON response containing the fetched records or an error message.
- * 
- * @throws \Exception If an error occurs while trying to fetch the data from the database.
- */
+    /**
+     * Fetches Mpesa confirmation records that have not been previously fetched.
+     *
+     * @param \Illuminate\Http\Request $request The incoming HTTP request.
+     * 
+     * @return \Illuminate\Http\JsonResponse A JSON response containing the fetched records or an error message.
+     * 
+     * @throws \Exception If an error occurs while trying to fetch the data from the database.
+     */
 
     public function fetchMpesaData(Request $request)
     {
@@ -39,16 +39,15 @@ class MpesaDataFetchController extends Controller
                 Cache::put($cacheKey, $newLastFetchedId);
             }
 
-            Log::channel('mpesa')->info('Fetch_Initiated - ' - $records->max('id'));
-            return response()->json($records,200);
-
+            Log::channel('mpesa')->info('Fetch_Initiated:  ' - $records->max('id'));
+            return response()->json($records, 200);
         } catch (\Exception $e) {
 
             $errorMessage = $e->getMessage();
 
-            Log::channel('mpesa')->error('Error fetching record above' . $records->max('id') . $errorMessage);
+            Log::channel('mpesa')->error('Error fetching records: ' . $errorMessage);
 
-            return response()->json($errorMessage, 500);
+            return response()->json(['error' => $errorMessage], 500);
         }
     }
 }
