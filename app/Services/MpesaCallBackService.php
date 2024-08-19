@@ -4,6 +4,7 @@
 namespace App\Services;
 
 use App\Models\MpesaConfirmation;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 
 class MpesaCallBackService
@@ -19,9 +20,11 @@ class MpesaCallBackService
  * @throws \Exception If an error occurs while saving the data to the database.
  */
 
-    public function handleCallBackData($data)
+    public function handleCallBackData(array $data) : JsonResponse
     {
 
+
+        // Extract data from the callback
         $transactionType = $data['TransactionType'];
         $transactionId = $data['TransID'];
         $transTime = $data['TransTime'];
@@ -38,6 +41,8 @@ class MpesaCallBackService
 
 
         try {
+
+            // Save the data to the database
 
             $mpesaConfirmation = new MpesaConfirmation();
             $mpesaConfirmation->transaction_type = $transactionType;
@@ -57,12 +62,12 @@ class MpesaCallBackService
 
             Log::channel('mpesa')->info('Mpesa Data Saved. TransId - ' . $transactionId);
 
-            return response()->json(['message'=> 'Confirmation Data Saved SUccesfully'],200);
+            return response()->json(['message'=> 'Confirmation Data Saved Successfully'],200);
         } catch (\Exception $e) {
 
             $errorMessage = $e->getMessage();
 
-            Log::channel('mpesa')->error('Error saving data for' . $transactionId . $errorMessage);
+            Log::channel('mpesa')->error('Error saving data for TransId ' . $transactionId . ': ' . $errorMessage);
             return response()->json(['error'=> 'Something Went Wrong'],500);
         }
     }

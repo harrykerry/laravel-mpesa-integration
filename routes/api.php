@@ -20,9 +20,15 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-Route::post('/v1/mpesaConfirmation/callback',[MpesaCallbackController::class,'handlec2bCallback']);
+// M-PESA  Confirmation Callback 
+Route::post('/mpesa/confirmation/callback',[MpesaCallbackController::class,'handlec2bCallback']);
 
-Route::post('/v1/mpesaValidation/callback',[MpesaCallbackController::class,'hanclec2bvalidation']);
+// M-PESA Validation Callback
+Route::post('/mpesa/validation/callback',[MpesaCallbackController::class,'hanclec2bvalidation']);
 
-Route::get('/fetch-records',[MpesaDataFetchController::class,'fetchMpesaData']);
+//Fetch M-PESA Records
+Route::get('/mpesa/records/fetch',[MpesaDataFetchController::class,'fetchMpesaData']);
+
+// Register M-PESA Callback
+Route::post('/mpesa/callback/register', [MpesaCallbackController::class,'registerCallback']);
 
