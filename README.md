@@ -9,28 +9,38 @@
 
 ## About This Project
 
-This Laravel application handles Safaricom M-PESA C2B callback data. It provides a mechanism to store callback data from M-PESA and exposes an endpoint for external systems to fetch the stored data. 
+This Laravel application manages Safaricom M-PESA C2B (Customer-to-Business) transactions, including callback data processing and STK push service. It also supports C2B URL registration. The application stores M-PESA callback data and provides API endpoints for external systems to register callback URLs and fetch stored data.
+
+Feel free to adjust the content to better fit the specifics of your project - Harold Kerry 😊
+
 
 ### Features
 
 - **M-PESA Callback Handling**: Receives and processes M-PESA C2B callback data.
+- **C2B URL Registration**: Allows clients to register their confirmation and validation URLs with M-PESA.
 - **Data Storage**: Stores callback data in a MySQL database.
-- **Data Fetching Endpoint**: Provides an API endpoint for external systems to retrieve previously stored data.
+- **Data Fetching Endpoint**: Exposes an API endpoint for external systems to retrieve stored callback data.
+- **M-PESA STK Service**: Allows interaction with M-PESA's STK push feature to initiate payments.
 
 ### Project Structure
 
 - **Controllers**: Manage incoming requests and responses.
-  - `MpesaCallbackController`: Handles the callback and validation requests from M-PESA.
+  - `MpesaCallbackController`: Handles M-PESA callback and validation requests, and manages URL registration.
+  - `MpesaDataFetchController`: Fetches stored M-PESA callback data.
 
 - **Services**: Encapsulate business logic.
   - `MpesaCallBackService`: Processes and saves M-PESA callback data.
+  - `MpesaAuthService`: Handles M-PESA access token generation.
+  - `MpesaCallbackRegistrationService`: Manages M-PESA C2B URL registration.
 
 - **Models**: Represent the database tables.
   - `MpesaConfirmation`: Eloquent model for storing callback data.
 
 - **Routes**: Define the API endpoints.
-  - `POST /v1/mpesaConfirmation/callback`: Endpoint for M-PESA callback.
-  - `POST /v1/mpesaValidation/callback`: Endpoint for M-PESA validation.
+  - `POST /mpesa/confirmation/callback`: Endpoint for M-PESA confirmation callback.
+  - `POST /mpesa/validation/callback`: Endpoint for M-PESA validation callback.
+  - `POST /mpesa/callback/register`: Endpoint for registering confirmation and validation URLs.
+  - `GET /mpesa/records/fetch`: Endpoint to fetch stored M-PESA callback data.
 
 ### Installation
 
@@ -58,16 +68,17 @@ This Laravel application handles Safaricom M-PESA C2B callback data. It provides
 ### Usage
 
 - **M-PESA Callback Handling**:
-  - The `/v1/mpesaConfirmation/callback` endpoint will receive callback data from M-PESA and store it in the database.
+  - The `/mpesa/confirmation/callback` endpoint will receive callback data from M-PESA and store it in the database.
 
 - **M-PESA Validation**:
-  - The `/v1/mpesaValidation/callback` endpoint responds to M-PESA with a JSON response indicating whether the validation is accepted or rejected.Check Daraja Docs on how to respond to reject a transaction
+  - The `/mpesa/validation/callback` endpoint responds to M-PESA with a JSON response to accept or reject transactions.
+
+- **C2B URL Registration**:
+  - The `/mpesa/callback/register` endpoint allows clients to register their confirmation and validation URLs with M-PESA.
 
 - **Fetch Stored Data**:
-  - Implement an endpoint to fetch stored callback data based on your requirements.
+  - The `/mpesa/records/fetch` endpoint allows external systems to fetch stored callback data.
 
 ### Contributing
 
 If you'd like to contribute to this project, please submit a pull request with a description of the changes.
-
-Feel free to adjust the content to better fit the specifics of your project. 😊
