@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\MpesaCallbackController;
 use App\Http\Controllers\MpesaDataFetchController;
+use App\Http\Controllers\mpesaStkController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -27,8 +28,17 @@ Route::post('/mpesa/confirmation/callback',[MpesaCallbackController::class,'hand
 Route::post('/mpesa/validation/callback',[MpesaCallbackController::class,'hanclec2bvalidation']);
 
 //Fetch M-PESA Records
-Route::get('/mpesa/records/fetch',[MpesaDataFetchController::class,'fetchMpesaData']);
+Route::get('/mpesa/records/fetch',[MpesaDataFetchController::class,'fetchC2bPayments']);
 
 // Register M-PESA Callback
 Route::post('/mpesa/callback/register', [MpesaCallbackController::class,'registerCallback']);
+
+//Initiate an STK request
+Route::post('/mpesa/stk/initiate', [mpesaStkController::class, 'initiateStkRequest']);
+
+//Handle the callback data from M-PESA
+Route::post('/mpesa/stk/callback', [mpesaStkController::class, 'handleStkCallback']);
+
+//Fetch M-PESA STK payments from the database
+Route::get('/mpesa/stk/payments', [MpesaDataFetchController::class, 'fetchStkPayments']);
 

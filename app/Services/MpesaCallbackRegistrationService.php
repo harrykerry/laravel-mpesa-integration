@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\Log;
 class MpesaCallbackRegistrationService
 {
 
-     /**
+    /**
      * Register the M-PESA callback URLs with M-PESA.
      *
      * @param array $callbackUrlData An associative array containing callback URL data:
@@ -45,16 +45,17 @@ class MpesaCallbackRegistrationService
 
             $response = $authService->generateAccessToken($authUrl, $consumerKey, $consumerSecret);
 
-            if (isset($response['auth_error'])) {
+            if (isset($response['error'])) {
 
-                $errorMessage = $response['auth_error'];
+                $errorMessage = $response['error'];
 
                 Log::channel('mpesa')->error("Failed to fetch access token: $errorMessage");
 
-                return response()->json(['error' => $errorMessage], 500);
+                return ['error' => $errorMessage];
             }
 
-            $accessToken = $response;
+            $accessToken = $response['access_token'];
+
             $client = new Client();
 
             $response = $client->post($registerUrl, [
@@ -76,7 +77,7 @@ class MpesaCallbackRegistrationService
 
             Log::channel('mpesa')->info('Callback URL Registration' . $responseBody);
 
-            return $responseBody;
+            return ['success' => $responseBody];
         } catch (\Exception $e) {
 
             $errorMessage = $e->getMessage();

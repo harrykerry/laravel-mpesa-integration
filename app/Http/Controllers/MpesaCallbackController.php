@@ -12,7 +12,7 @@ class MpesaCallbackController extends Controller
 {
     //
 
-      /**
+    /**
      * Handle the registration of M-PESA callback URLs.
      *
      * @param \Illuminate\Http\Request $request The incoming request containing callback URL data.
@@ -21,15 +21,15 @@ class MpesaCallbackController extends Controller
      */
 
 
-     public function registerCallback(Request $request): JsonResponse
+    public function registerCallback(Request $request): JsonResponse
     {
-       
+
         $requestData = $request->validate([
             'confirmation_url' => 'required|url',
             'validation_url' => 'required|url',
             'consumer_key' => 'required|string',
             'consumer_secret' => 'required|string',
-            'shortcode' => 'required|numeric', 
+            'shortcode' => 'required|numeric',
         ]);
 
         $callbackUrlData = [
@@ -42,18 +42,22 @@ class MpesaCallbackController extends Controller
 
         $mpesaCallbackRegistration = new MpesaCallbackRegistrationService;
 
-        
+
         $response = $mpesaCallbackRegistration->registerCallBackUrl($callbackUrlData);
 
         if (isset($response['error'])) {
             Log::channel('mpesa')->error('Callback URL registration failed: ' . $response['error']);
 
-            return response()->json($response, 500);
+            return response()->json([
+                'status' => 'error',
+                'message' => $response['error']
+            ], 500);
         }
 
-        return response()->json($response, 200);
-
-
+        return response()->json([
+            'status' => 'success',
+            'message' => $response['success'] ?? 'Callback URL registered successfully'
+        ], 200);
     }
 
 
@@ -76,7 +80,17 @@ class MpesaCallbackController extends Controller
 
         $response = $mpesaCallBackService->handleCallBackData($mpesaData);
 
-        return $response;
+        if (isset($response['error'])) {
+            return response()->json([
+                'status' => 'error',
+                'message' => $response['error']
+            ], 400);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => $response['success']
+        ], 200);
     }
 
 
