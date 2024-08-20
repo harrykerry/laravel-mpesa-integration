@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
+use App\Models\MpesaStkPayments;
 use App\Models\MpesaConfirmation;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
@@ -10,6 +11,10 @@ use Illuminate\Support\Facades\Cache;
 class MpesaDataFetchController extends Controller
 {
     //
+
+    // You can implement API authentication here to secure the fetch operation. 
+
+    //You can also modify the fetch, mine was for a specific system.
 
 
     /**
@@ -19,11 +24,13 @@ class MpesaDataFetchController extends Controller
      * 
      * @return \Illuminate\Http\JsonResponse A JSON response containing the fetched records or an error message.
      * 
-     * @throws \Exception If an error occurs while trying to fetch the data from the database.
      */
 
-    public function fetchMpesaData(Request $request)
+    public function fetchC2bPayments(Request $request)
     {
+
+
+
         try {
             $cacheKey = 'fetched_record_ids';
 
@@ -40,14 +47,48 @@ class MpesaDataFetchController extends Controller
             }
 
             Log::channel('mpesa')->info('Fetch_Initiated:  ' - $records->max('id'));
-            return response()->json($records, 200);
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $records
+            ], 200);
         } catch (\Exception $e) {
 
             $errorMessage = $e->getMessage();
 
             Log::channel('mpesa')->error('Error fetching records: ' . $errorMessage);
 
-            return response()->json(['error' => $errorMessage], 500);
+            return response()->json([
+                'status' => 'error',
+                'message' => $errorMessage
+            ], 500);
+        }
+    }
+
+
+    /**
+     * Fetch all M-PESA STK payments from the database.
+     *
+     * @return array
+     */
+
+    public function fetchStkPayments(Request $request)
+    {
+        try {
+            $records = MpesaStkPayments::all(); // Fetch all payments, or use a query to filter as needed
+
+            return response()->json([
+                'status' => 'success',
+                'data' => $records
+            ], 200);
+        } catch (\Exception $e) {
+            Log::channel('mpesa')->error('Error fetching STK payments: ' . $e->getMessage());
+
+            $errorMessage = $e->getMessage();
+            return response()->json([
+                'status' => 'error',
+                'message' => $errorMessage
+            ], 500);
         }
     }
 }

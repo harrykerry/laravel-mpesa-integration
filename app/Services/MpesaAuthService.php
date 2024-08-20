@@ -17,7 +17,7 @@ class MpesaAuthService
      * @param string $url The URL to request the token from.
      * @param string $consumerKey Your M-PESA consumer key.
      * @param string $consumerSecret Your M-PESA consumer secret.
-     * @return string|array The access token or an error message.
+     * @return array The access token and expiry or an error message.
      */
 
     public function generateAccessToken(string $url, string $consumerKey, string $consumerSecret): string|array
@@ -32,30 +32,31 @@ class MpesaAuthService
 
             $authToken = base64_encode("{$consumerKey}:{$consumerSecret}");
 
-            // Prepare the headers with Basic Authentication
+
             $headers = [
                 'Authorization' => 'Basic ' . $authToken
             ];
 
-            // Send the GET request to the M-PESA token endpoint
+
             $response = $client->get($url, [
                 'headers' => $headers,
             ]);
 
 
-            // Decode and return the access token
-
             $responseBody = json_decode($response->getBody(), true);
 
             Log::channel('mpesa')->info('Auth Token fetched');
 
-            return $responseBody['access_token'];
+            return [
+                'access_token' => $responseBody['access_token'],
+                'expires_in' => $responseBody['expires_in']
+            ];
         } catch (\Exception $e) {
             $errorMessage = $e->getMessage();
 
             Log::channel('mpesa')->error("Auth Error: " . $errorMessage);
 
-            return ['auth_error' => $errorMessage];
+            return ['error' => $errorMessage];
         }
     }
 }
