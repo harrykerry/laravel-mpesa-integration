@@ -41,6 +41,9 @@ Feel free to adjust the content to better fit the specifics of your project - Ha
   - `POST /mpesa/validation/callback`: Endpoint for M-PESA validation callback.
   - `POST /mpesa/callback/register`: Endpoint for registering confirmation and validation URLs.
   - `GET /mpesa/records/fetch`: Endpoint to fetch stored M-PESA callback data.
+  - `POST /mpesa/stk/initiate: Endpoint to initiate an STK (Sim Toolkit) request with M-PESA.
+  - `POST /mpesa/stk/callback: Endpoint to handle the callback data from M-PESA STK request.
+  - `GET /mpesa/stk/payments: Endpoint to fetch M-PESA STK payments from the database.
 
 ### Installation
 
