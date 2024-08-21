@@ -13,6 +13,13 @@ This Laravel application manages Safaricom M-PESA C2B (Customer-to-Business) tra
 
 Feel free to adjust the content to better fit the specifics of your project - Harold Kerry 😊
 
+## My Contact
+If you have any questions or need further assistance, feel free to reach out:
+
+Email: haroldkerry@gmail.com
+Website: haroldkerry.co.ke
+
+
 
 ### Features
 
@@ -40,10 +47,10 @@ Feel free to adjust the content to better fit the specifics of your project - Ha
   - `POST /mpesa/confirmation/callback`: Endpoint for M-PESA confirmation callback.
   - `POST /mpesa/validation/callback`: Endpoint for M-PESA validation callback.
   - `POST /mpesa/callback/register`: Endpoint for registering confirmation and validation URLs.
-  - `GET /mpesa/records/fetch`: Endpoint to fetch stored M-PESA callback data.
+  - `GET /mpesa/payments/c2b`: Endpoint to fetch stored M-PESA callback data filtered by shortcode.
   - `POST /mpesa/stk/initiate: Endpoint to initiate an STK (Sim Toolkit) request with M-PESA.
   - `POST /mpesa/stk/callback: Endpoint to handle the callback data from M-PESA STK request.
-  - `GET /mpesa/stk/payments: Endpoint to fetch M-PESA STK payments from the database.
+  - `GET /mpesa/payments/stk: Endpoint to fetch M-PESA STK payments from the database filtered by shortcode.
 
 ### Installation
 

@@ -6,10 +6,13 @@ use Illuminate\Http\Request;
 use App\Services\MpesaStkService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
+use App\Traits\MobileFormattingTrait;
 
 class mpesaStkController extends Controller
 {
     //
+
+    use MobileFormattingTrait;
 
     /**
      * Initiates an M-PESA STK transaction.
@@ -27,12 +30,15 @@ class mpesaStkController extends Controller
             'shortcode' => 'required|string',
             'passkey' => 'required|string',
             'amount' => 'required|numeric',
-            'msisdn' => 'required|string',
+            'msisdn' => 'required|numeric',
             'account_reference' => 'required|string',
             'stk_callback' => 'required|string',
             'organization_code' => 'required|string', //till or paybill
             'transaction_type' => 'required|string', //use CustomerBuyGoodsOnline for paybill and CustomerPayBillOnline for til
         ]);
+
+
+        $validatedData['msisdn'] = $this->sanitizeAndFormatMobile($validatedData['msisdn']);
 
 
         $mpesaStkService = new MpesaStkService;
@@ -52,7 +58,7 @@ class mpesaStkController extends Controller
 
             Log::channel('mpesa')->info('STK Request successful: ' . json_encode($response));
 
-            $result = $mpesaStkService->saveStkPayment($response);
+            $result = $mpesaStkService->saveStkPayment($response,$validatedData['shortcode']);
 
 
             if (isset($result['error'])) {
@@ -123,7 +129,7 @@ class mpesaStkController extends Controller
                     $transactionDate = $item['Value'];
                     break;
                 case 'PhoneNumber':
-                    $msisdn = $item['Value'];
+                    $msisdn = $this->sanitizeAndFormatMobile($item['Value']);
                     break;
                 default:
                     //Do nothing

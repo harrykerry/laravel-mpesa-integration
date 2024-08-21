@@ -28,7 +28,7 @@ Route::post('/mpesa/confirmation/callback',[MpesaCallbackController::class,'hand
 Route::post('/mpesa/validation/callback',[MpesaCallbackController::class,'hanclec2bvalidation']);
 
 //Fetch M-PESA Records
-Route::get('/mpesa/records/fetch',[MpesaDataFetchController::class,'fetchC2bPayments']);
+Route::get('/mpesa/payments/c2b',[MpesaDataFetchController::class,'fetchC2bPayments']);
 
 // Register M-PESA Callback
 Route::post('/mpesa/callback/register', [MpesaCallbackController::class,'registerCallback']);
@@ -40,5 +40,5 @@ Route::post('/mpesa/stk/initiate', [mpesaStkController::class, 'initiateStkReque
 Route::post('/mpesa/stk/callback', [mpesaStkController::class, 'handleStkCallback']);
 
 //Fetch M-PESA STK payments from the database
-Route::get('/mpesa/stk/payments', [MpesaDataFetchController::class, 'fetchStkPayments']);
+Route::get('/mpesa/payments/stk', [MpesaDataFetchController::class, 'fetchStkPayments']);
 
