@@ -30,13 +30,23 @@ class MpesaDataFetchController extends Controller
     {
 
 
-
         try {
+
+            $shortcode = $request->query('shortcode');
+
+            $validatedData = $request->validate([
+                'shortcode' => 'required|numeric|regex:/^[0-9]+$/'
+            ]);
+
+            $shortcode = $validatedData['shortcode'];
+
+
             $cacheKey = 'fetched_record_ids';
 
             $lastFetchedId = Cache::get($cacheKey, 0);
 
             $records = MpesaConfirmation::where('id', '>', $lastFetchedId)
+                ->where('business_shortcode', $shortcode)
                 ->get(['mobile_number', 'first_name', 'business_shortcode', 'transaction_id']);
 
             if ($records->isNotEmpty()) {
@@ -75,7 +85,18 @@ class MpesaDataFetchController extends Controller
     public function fetchStkPayments(Request $request)
     {
         try {
-            $records = MpesaStkPayments::all(); // Fetch all payments, or use a query to filter as needed
+
+            $shortcode = $request->query('shortcode');
+
+            $validatedData = $request->validate([
+                'shortcode' => 'required|numeric|regex:/^[0-9]+$/'
+            ]);
+
+            $shortcode = $validatedData['shortcode'];
+
+            $records = MpesaStkPayments::where('business_shortcode', $shortcode)
+                ->get();
+
 
             return response()->json([
                 'status' => 'success',

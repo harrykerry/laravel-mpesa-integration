@@ -165,12 +165,13 @@ class MpesaStkService
      * @param array $data Array containing 'MerchantRequestID' and 'CheckoutRequestID'.
      * @return array Success or error message indicating the result of the save operation.
      */
-    public function saveStkPayment(array $data): array
+    public function saveStkPayment(array $data,string $shortcode): array
     {
         try {
             MpesaStkPayments::create([
                 'merchant_request_id' => $data['MerchantRequestID'],
                 'checkout_request_id' => $data['CheckoutRequestID'],
+                'shortcode' => $shortcode, 
             ]);
 
             return ['success' => 'Saved Data for' . $data['CheckoutRequestID']];
