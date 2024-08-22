@@ -222,13 +222,13 @@ class MpesaStkService
 
         $response = $mpesaAuthService->generateAccessToken($url, $consumerKey, $consumerSecret);
 
-        if (isset($response['auth_error'])) {
+        if (isset($response['error'])) {
 
-            $errorMessage = $response['auth_error'];
+            $errorMessage = $response['error'];
 
             Log::channel('mpesa')->error("STK- Failed to fetch access token: $errorMessage");
 
-            return ['error' => $response['auth_error']];
+            return ['error' => $response['error']];
         }
 
         return $response;
