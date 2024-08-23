@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('checkout_request_id')->unique(); 
             $table->string('transaction_id')->nullable();
             $table->string('transaction_date')->nullable();
-            $table->string('shortcode')->nullable(); 
+            $table->string('business_shortcode')->nullable(); 
             $table->unsignedBigInteger('amount')->nullable(); 
             $table->string('msisdn')->nullable();
             $table->timestamps();

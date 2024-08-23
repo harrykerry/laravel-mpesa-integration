@@ -54,13 +54,21 @@ class MpesaDataFetchController extends Controller
                 $newLastFetchedId = $records->max('id');
 
                 Cache::put($cacheKey, $newLastFetchedId);
+
+                Log::channel('mpesa')->info('C2B_Data_Fetch_Initiated:  ' . $records->max('id'));
+
+                return response()->json([
+                    'status' => 'success',
+                    'data' => $records
+                ], 200);
             }
 
-            Log::channel('mpesa')->info('Fetch_Initiated:  ' - $records->max('id'));
+            Log::channel('mpesa')->info('C2B_Data_Fetch_Initiated: No records found for' . $shortcode);
 
             return response()->json([
                 'status' => 'success',
-                'data' => $records
+                'message' => 'No records found',
+                'data' => []
             ], 200);
         } catch (\Exception $e) {
 
@@ -98,10 +106,21 @@ class MpesaDataFetchController extends Controller
                 ->get();
 
 
-            return response()->json([
-                'status' => 'success',
-                'data' => $records
-            ], 200);
+            if ($records->isNotEmpty()) {
+                Log::channel('mpesa')->info('STK_Data_Fetch_Initiated:  ' . $shortcode);
+                return response()->json([
+                    'status' => 'success',
+                    'data' => $records
+                ], 200);
+            } else {
+                Log::channel('mpesa')->info('STK_Data_Fetch_Initiated: No records found for: ' . $shortcode);
+
+                return response()->json([
+                    'status' => 'success',
+                    'message' => 'No records found',
+                    'data' => []
+                ], 200);
+            }
         } catch (\Exception $e) {
             Log::channel('mpesa')->error('Error fetching STK payments: ' . $e->getMessage());
 
