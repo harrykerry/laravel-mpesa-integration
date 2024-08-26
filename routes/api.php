@@ -25,7 +25,7 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::post('/payments/confirmation/callback',[MpesaCallbackController::class,'handlec2bCallback']);
 
 // M-PESA Validation Callback
-Route::post('/payments/validation/callback',[MpesaCallbackController::class,'hanclec2bvalidation']);
+Route::post('/payments/validation/callback',[MpesaCallbackController::class,'handlec2bvalidation']);
 
 //Fetch M-PESA Records
 Route::get('/mpesa/payments/c2b',[MpesaDataFetchController::class,'fetchC2bPayments']);
