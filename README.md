@@ -44,8 +44,8 @@ Website: haroldkerry.co.ke
   - `MpesaConfirmation`: Eloquent model for storing callback data.
 
 - **Routes**: Define the API endpoints.
-  - `POST /mpesa/confirmation/callback`: Endpoint for M-PESA confirmation callback.
-  - `POST /mpesa/validation/callback`: Endpoint for M-PESA validation callback.
+  - `POST /payments/confirmation/callback`: Endpoint for M-PESA confirmation callback.
+  - `POST /payments/validation/callback`: Endpoint for M-PESA validation callback.
   - `POST /mpesa/callback/register`: Endpoint for registering confirmation and validation URLs.
   - `GET /mpesa/payments/c2b`: Endpoint to fetch stored M-PESA callback data filtered by shortcode.
   - `POST /mpesa/stk/initiate: Endpoint to initiate an STK (Sim Toolkit) request with M-PESA.
@@ -78,10 +78,10 @@ Website: haroldkerry.co.ke
 ### Usage
 
 - **M-PESA Callback Handling**:
-  - The `/mpesa/confirmation/callback` endpoint will receive callback data from M-PESA and store it in the database.
+  - The `/payments/confirmation/callback` endpoint will receive callback data from M-PESA and store it in the database.
 
 - **M-PESA Validation**:
-  - The `/mpesa/validation/callback` endpoint responds to M-PESA with a JSON response to accept or reject transactions.
+  - The `/payments/validation/callback` endpoint responds to M-PESA with a JSON response to accept or reject transactions.
 
 - **C2B URL Registration**:
   - The `/mpesa/callback/register` endpoint allows clients to register their confirmation and validation URLs with M-PESA.

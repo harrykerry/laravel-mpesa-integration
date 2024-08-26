@@ -31,13 +31,10 @@ class MpesaCallbackRegistrationService
         $confirmationUrl = $callbackUrlData['confirmation_url'];
         $validationUrl = $callbackUrlData['validation_url'];
         $consumerKey = $callbackUrlData['consumer_key'];
-        $consumerSecret = $callbackUrlData['consumer_secrest'];
+        $consumerSecret = $callbackUrlData['consumer_secret'];
         $shortcode = $callbackUrlData['shortcode'];
         $authUrl = env('SAF_AUTH_URL');
         $registerUrl = env('SAF_C2B_URL');
-
-        //The query params are already passed in the auth url. Pass it as it is.
-
 
         try {
 
@@ -46,44 +43,50 @@ class MpesaCallbackRegistrationService
             $response = $authService->generateAccessToken($authUrl, $consumerKey, $consumerSecret);
 
             if (isset($response['error'])) {
-
                 $errorMessage = $response['error'];
-
                 Log::channel('mpesa')->error("Failed to fetch access token: $errorMessage");
-
                 return ['error' => $errorMessage];
             }
 
             $accessToken = $response['access_token'];
+            
 
-            $client = new Client();
+            $ch = curl_init();
 
-            $response = $client->post($registerUrl, [
-                'headers' => [
-                    'Authorization' => 'Bearer ' . $accessToken,
-                    'Content-Type' => 'application/json'
-                ],
-
-                'json' => [
-                    'Shortcode' => $shortcode,
-                    'ResponseType' => 'Completed', //Check daraja docs on when to use Cancelled here. Usually when your validation URL cannot be reached
-                    'ConfirmationURL' => $confirmationUrl,
-                    'ValidationURL' => $validationUrl
-                ],
+            $postData = json_encode([
+                'Shortcode' => $shortcode,
+                'ResponseType' => 'Completed',
+                'ConfirmationURL' => $confirmationUrl,
+                'ValidationURL' => $validationUrl
             ]);
 
+            curl_setopt($ch, CURLOPT_URL, $registerUrl);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, [
+                'Authorization: Bearer ' . $accessToken,
+                'Content-Type: application/json'
+            ]);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
 
-            $responseBody = json_decode($response->getBody(), true);
+            $response = curl_exec($ch);
 
-            Log::channel('mpesa')->info('Callback URL Registration' . $responseBody);
+            if (curl_errno($ch)) {
+                $errorMessage = curl_error($ch);
+                Log::error('Error registering M-PESA callback URL: ' . $errorMessage);
+                curl_close($ch);
+                return ['error' => $errorMessage];
+            }
+
+            $responseBody = json_decode($response, true);
+            curl_close($ch);
+
+            Log::channel('mpesa')->info('Callback URL Registration', $responseBody);
 
             return ['success' => $responseBody];
         } catch (\Exception $e) {
-
             $errorMessage = $e->getMessage();
-
             Log::error('Error registering M-PESA callback URL: ' . $errorMessage);
-
             return ['error' => $errorMessage];
         }
     }
