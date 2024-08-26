@@ -54,7 +54,7 @@ class MpesaCallbackRegistrationService
             $ch = curl_init();
 
             $postData = json_encode([
-                'Shortcode' => $shortcode,
+                'ShortCode' => $shortcode,
                 'ResponseType' => 'Completed',
                 'ConfirmationURL' => $confirmationUrl,
                 'ValidationURL' => $validationUrl
