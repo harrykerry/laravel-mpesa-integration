@@ -102,7 +102,7 @@ class MpesaCallbackController extends Controller
      * @return \Illuminate\Http\JsonResponse A JSON response indicating that the validation was accepted.
      */
 
-    public function hanclec2bvalidation(Request $request)
+    public function handlec2bvalidation(Request $request)
     {
 
         Log::channel('app')->info('Validation_Initiated: ' . json_encode($request->all()));
