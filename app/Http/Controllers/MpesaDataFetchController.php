@@ -47,7 +47,7 @@ class MpesaDataFetchController extends Controller
 
             $records = MpesaConfirmation::where('id', '>', $lastFetchedId)
                 ->where('business_shortcode', $shortcode)
-                ->get(['mobile_number', 'first_name', 'business_shortcode', 'transaction_id']);
+                ->get(['id','transaction_type', 'transaction_id', 'transaction_amount', 'business_shortcode','mobile_number', 'first_name']);
 
             if ($records->isNotEmpty()) {
 
