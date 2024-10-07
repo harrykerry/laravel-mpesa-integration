@@ -7,6 +7,7 @@ use App\Services\MpesaStkService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use App\Traits\MobileFormattingTrait;
+use Illuminate\Support\Facades\Validator;
 
 class mpesaStkController extends Controller
 {
@@ -21,10 +22,12 @@ class mpesaStkController extends Controller
      * @return \Illuminate\Http\JsonResponse JSON response with API result or error message.
      */
 
-    public function initiateStkRequest(Request $request)
+    public function initiateStkRequest(Request $request):JsonResponse
     {
 
-        $validatedData = $request->validate([
+
+        $validatedData = Validator::make($request->all(),[
+
             'consumer_key' => 'required|string',
             'consumer_secret' => 'required|string',
             'shortcode' => 'required|string',
@@ -35,15 +38,23 @@ class mpesaStkController extends Controller
             'stk_callback' => 'required|string',
             'organization_code' => 'required|string', //till or paybill
             'transaction_type' => 'required|string', //use CustomerBuyGoodsOnline for paybill and CustomerPayBillOnline for til
+
         ]);
 
+        if ($validatedData->fails()) {
+            return response()->json($validatedData->errors(), 422);
+        }
 
-        $validatedData['msisdn'] = $this->sanitizeAndFormatMobile($validatedData['msisdn']);
+        $requestData = $validatedData->validated();
+
+
+
+        $requestData['msisdn'] = $this->sanitizeAndFormatMobile($validatedData['msisdn']);
 
 
         $mpesaStkService = new MpesaStkService;
 
-        $response = $mpesaStkService->lipaNaMpesaStk($validatedData);
+        $response = $mpesaStkService->lipaNaMpesaStk($requestData);
 
         if (isset($response['error'])) {
 
@@ -92,7 +103,7 @@ class mpesaStkController extends Controller
      * @return \Illuminate\Http\JsonResponse
      */
 
-    public function handleStkCallback(Request $request)
+    public function handleStkCallback(Request $request):JsonResponse
     {
 
         Log::channel('mpesa')->info('Received STK Callback data: ' . json_encode($request->all()));

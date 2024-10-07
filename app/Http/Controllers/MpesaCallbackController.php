@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\MpesaCallbackRegistrationService;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use App\Services\MpesaCallBackService;
+use Illuminate\Support\Facades\Validator;
+use App\Services\MpesaCallbackRegistrationService;
 
 class MpesaCallbackController extends Controller
 {
@@ -24,13 +25,20 @@ class MpesaCallbackController extends Controller
     public function registerCallback(Request $request): JsonResponse
     {
 
-        $requestData = $request->validate([
+
+        $validateData = Validator::make($request->all(),[
             'confirmation_url' => 'required|url',
             'validation_url' => 'required|url',
             'consumer_key' => 'required|string',
             'consumer_secret' => 'required|string',
-            'shortcode' => 'required|numeric',
+            'shortcode' => 'required|numeric'
         ]);
+
+        if ($validateData->fails()) {
+            return response()->json($validateData->errors(), 422);
+        }
+
+        $requestData = $validateData->validated();
 
         $callbackUrlData = [
             'confirmation_url' => $requestData['confirmation_url'],
@@ -69,7 +77,7 @@ class MpesaCallbackController extends Controller
      * @return \Illuminate\Http\JsonResponse The response from the `MpesaCallBackService` after processing the callback data.
      */
 
-    public function handlec2bCallback(Request $request)
+    public function handlec2bCallback(Request $request):JsonResponse
     {
 
         Log::channel('app')->info('CallBack_Initiated: ' . json_encode($request->all()));
@@ -102,7 +110,7 @@ class MpesaCallbackController extends Controller
      * @return \Illuminate\Http\JsonResponse A JSON response indicating that the validation was accepted.
      */
 
-    public function handlec2bvalidation(Request $request)
+    public function handlec2bvalidation(Request $request):JsonResponse
     {
 
         Log::channel('app')->info('Validation_Initiated: ' . json_encode($request->all()));

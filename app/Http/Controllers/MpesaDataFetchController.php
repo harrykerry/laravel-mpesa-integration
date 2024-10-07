@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\MpesaStkPayments;
 use App\Models\MpesaConfirmation;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Validator;
 
 class MpesaDataFetchController extends Controller
 {
@@ -26,7 +28,7 @@ class MpesaDataFetchController extends Controller
      * 
      */
 
-    public function fetchC2bPayments(Request $request)
+    public function fetchC2bPayments(Request $request):JsonResponse
     {
 
 
@@ -34,11 +36,18 @@ class MpesaDataFetchController extends Controller
 
             $shortcode = $request->query('shortcode');
 
-            $validatedData = $request->validate([
+            $validatedData = Validator::make($request->all(), [
                 'shortcode' => 'required|numeric|regex:/^[0-9]+$/'
             ]);
 
-            $shortcode = $validatedData['shortcode'];
+            if ($validatedData->fails()) {
+                return response()->json($validatedData->errors(), 422);
+            }
+
+            $requestData = $validatedData->validated();
+
+
+            $shortcode = $requestData['shortcode'];
 
 
             $cacheKey = 'fetched_record_ids';
@@ -47,7 +56,7 @@ class MpesaDataFetchController extends Controller
 
             $records = MpesaConfirmation::where('id', '>', $lastFetchedId)
                 ->where('business_shortcode', $shortcode)
-                ->get(['id','transaction_type', 'transaction_id', 'transaction_amount', 'business_shortcode','mobile_number', 'first_name']);
+                ->get(['id', 'transaction_type', 'transaction_id', 'transaction_amount', 'business_shortcode', 'mobile_number', 'first_name']);
 
             if ($records->isNotEmpty()) {
 
@@ -87,20 +96,27 @@ class MpesaDataFetchController extends Controller
     /**
      * Fetch all M-PESA STK payments from the database.
      *
-     * @return array
+     * @return \Illuminate\Http\JsonResponse 
      */
 
-    public function fetchStkPayments(Request $request)
+    public function fetchStkPayments(Request $request):JsonResponse
     {
         try {
 
             $shortcode = $request->query('shortcode');
 
-            $validatedData = $request->validate([
+            $validatedData = Validator::make($request->all(), [
                 'shortcode' => 'required|numeric|regex:/^[0-9]+$/'
             ]);
 
-            $shortcode = $validatedData['shortcode'];
+            if ($validatedData->fails()) {
+                return response()->json($validatedData->errors(), 422);
+            }
+
+            $requestData = $validatedData->validated();
+
+
+            $shortcode = $requestData['shortcode'];
 
             $records = MpesaStkPayments::where('business_shortcode', $shortcode)
                 ->get();
