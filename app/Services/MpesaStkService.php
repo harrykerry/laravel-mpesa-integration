@@ -2,8 +2,8 @@
 
 namespace App\Services;
 
-use App\Models\MpesaStkPayments;
 use Carbon\Carbon;
+use App\Models\MpesaStkPayments;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
@@ -34,7 +34,10 @@ class MpesaStkService
             $stkInitiateUrl = env('SAF_STK_URL');
 
 
-            $password = $this->getPassword($shortCode, $passkey);
+            $passwordValues = $this->getPassword($shortCode, $passkey);
+
+            $password = $passwordValues['password'];
+            $timestamp = $passwordValues['timestamp'];
 
             $accessToken = Cache::get('safaricom_stk_access_token');
 
@@ -56,8 +59,6 @@ class MpesaStkService
             }
 
             Log::channel('mpesa')->info("STK:Token generated");
-
-            $timestamp = Carbon::now()->format('YmdHis');
 
             $postData = [
                 'BusinessShortCode' => $shortCode,
@@ -191,17 +192,21 @@ class MpesaStkService
      *
      * @param int $shortCode The short code for the transaction.
      * @param string $passkey The passkey for the transaction.
-     * @return string The encoded password.
+     * @return array The encoded password and timestamp
      */
 
-    private function getPassword(int $shortCode, string $passkey): string
+    private function getPassword(int $shortCode, string $passkey): array
     {
 
         $timestamp = Carbon::now()->format('YmdHis');
 
         $password  = base64_encode($shortCode . $passkey . $timestamp);
 
-        return $password;
+        return [
+
+            'password'=>$password,
+            'timestamp'=>$timestamp
+        ];
     }
 
     /**
