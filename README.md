@@ -53,9 +53,9 @@ Website: haroldkerry.co.ke | volcha.co.ke
     -   `POST /payments/c2b/validation/callback`: Endpoint for M-PESA validation callback.
     -   `POST /mpesa/callback/register`: Endpoint for registering confirmation and validation URLs.
     -   `GET /mpesa/payments/c2b`: Endpoint to fetch stored M-PESA callback data filtered by shortcode.
-    -   `POST /mpesa/stk/initiate: Endpoint to initiate an STK (Sim Toolkit) request with M-PESA.
-    -   `POST /mpesa/stk/callback: Endpoint to handle the callback data from M-PESA STK request.
-    -   `GET /mpesa/payments/stk: Endpoint to fetch M-PESA STK payments from the database filtered by mobile.
+    -   `POST /mpesa/stk/initiate`: Endpoint to initiate an STK (Sim Toolkit) request with M-PESA.
+    -   `POST /mpesa/stk/callback`: Endpoint to handle the callback data from M-PESA STK request.
+    -   `GET /mpesa/payments/stk`: Endpoint to fetch M-PESA STK payments from the database filtered by mobile.
 
 ### Installation
 
