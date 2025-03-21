@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Carbon\Carbon;
 use App\Models\MpesaStkPayments;
+use App\Traits\MobileFormattingTrait;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
@@ -11,8 +12,13 @@ use Illuminate\Support\Facades\Cache;
 
 class MpesaStkService
 {
+
+    use MobileFormattingTrait;
+
+
+
     /**
-     * Initiates an STK push request to M-PESA.
+     * Initiates an STK push request.
      *
      * @param array $stkData Array containing STK push data.
      * @return array response or error message from the API.
@@ -45,10 +51,7 @@ class MpesaStkService
 
                 $response = $this->getAccessToken($consumerKey, $consumerSecret);
 
-                if (isset($response['error'])) {
-
-                    Log::channel('mpesa')->error('Failed to fetch access token: ' . $response['error']);
-
+                if (isset($response['status']) && $response['status'] === 'error') {
                     return $response;
                 }
 
@@ -57,8 +60,6 @@ class MpesaStkService
 
                 Cache::put('safaricom_stk_access_token', $accessToken, now()->addSeconds($expiry));
             }
-
-            Log::channel('mpesa')->info("STK:Token generated");
 
             $postData = [
                 'BusinessShortCode' => $shortCode,
@@ -91,24 +92,51 @@ class MpesaStkService
 
             $response = curl_exec($ch);
 
-            Log::channel('mpesa')->info('STK Request initiated');
-
             if (curl_errno($ch)) {
-                $error = 'Error: ' . curl_error($ch);
+
+                $errorMessage = curl_error($ch);
+
+                Log::channel('mpesa')->error("STK_ERROR:" . $errorMessage);
+
                 curl_close($ch);
-                return ['error' => $error];
+
+                return [
+                    'status' => 'error',
+                    'message' => $errorMessage
+                ];
             }
+
+            $responseBody = json_decode($response, true);
+            Log::channel('mpesa')->info("STK: Request initiated", $responseBody);
 
             curl_close($ch);
 
-            return json_decode($response, true);
+            if (isset($responseBody['ResponseCode']) && $responseBody['ResponseCode'] === '0') {
+
+                $this->saveStkPayment($responseBody, $shortCode);
+
+                return [
+                    'status' => 'success',
+                    'message' => $responseBody
+
+                ];
+            }
+
+            return [
+                'status' => 'error',
+                'message' => "STK error: " . json_encode($responseBody),
+            ];
         } catch (\Exception $e) {
 
             $errorMessage = $e->getMessage();
 
-            Log::channel('mpesa')->error('An error occurred: ' . $errorMessage);
+            Log::channel('mpesa')->error("STK_ERROR: $errorMessage");
 
-            return ['error' => 'An unexpected error occurred: ' . $errorMessage];
+
+            return [
+                'status' => 'error',
+                'message' => $errorMessage
+            ];
         }
     }
 
@@ -120,17 +148,51 @@ class MpesaStkService
      *                     Expected keys: 'merchant_request_id', 'checkout_request_id', 
      *                     'transaction_id', 'transaction_date', 'amount', 'msisdn'.
      * @return array An associative array indicating the result of the operation. 
-     *               Contains either 'success' with a message or 'error' with an error message.
      */
-    public function handleStkCallbackData(array $data): array
+    public function handleStkCallbackData(array $callbackData): array
     {
 
-        $merchantRequestId = $data['merchant_request_id'];
-        $checkoutRequestId = $data['checkout_request_id'];
-        $transactionId = $data['transaction_id'];
-        $transTime = $data['transaction_date'];
-        $amount = $data['amount'];
-        $msisdn = $data['msisdn'];
+        $merchantRequestId = $callbackData['MerchantRequestID'];
+        $checkoutRequestId = $callbackData['CheckoutRequestID'];
+        $resultCode = $callbackData['ResultCode'];
+        $resultDesc = $callbackData['ResultDesc'];
+
+        if ($resultCode !== 0) {
+
+            Log::channel('mpesa')->error("STK_CALLBACK_ERROR - Failed with code $resultCode - $resultDesc");
+
+            return [
+                'status' => 'error',
+                'message' => $resultDesc
+            ];
+        }
+
+        $callbackMetadata = $callbackData['CallbackMetadata']['Item'];
+
+        $amount = null;
+        $transactionDate = null;
+        $msisdn = null;
+        $transactionId = null;
+
+        foreach ($callbackMetadata as $item) {
+            switch ($item['Name']) {
+                case 'Amount':
+                    $amount = $item['Value'];
+                    break;
+                case 'MpesaReceiptNumber':
+                    $transactionId = $item['Value'];
+                    break;
+                case 'TransactionDate':
+                    $transactionDate = $item['Value'];
+                    break;
+                case 'PhoneNumber':
+                    $msisdn = $this->sanitizeAndFormatMobile($item['Value']);
+                    break;
+                default:
+                    break;
+            }
+        }
+
 
         $mpesaStkPayment = MpesaStkPayments::where('merchant_request_id', $merchantRequestId)
             ->where('checkout_request_id', $checkoutRequestId)
@@ -138,25 +200,35 @@ class MpesaStkService
 
         if (!$mpesaStkPayment) {
 
-            Log::channel('mpesa')->error('Record not found for MerchantRequestID: ' . $merchantRequestId . ' and CheckoutRequestID: ' . $checkoutRequestId);
+            Log::channel('mpesa')->error("STK_CALLBACK_ERROR: Record was not saved initially for $merchantRequestId  and CheckoutRequestID $checkoutRequestId");
 
-            return ['error' => 'Record not found for ' . $merchantRequestId];
+            return [
+                'status' => 'error',
+                'message' => "Record not found for $merchantRequestId"
+            ];
         }
 
         try {
 
             $mpesaStkPayment->transaction_id = $transactionId;
-            $mpesaStkPayment->transaction_date = $transTime;
+            $mpesaStkPayment->transaction_date = $transactionDate;
             $mpesaStkPayment->amount = $amount;
             $mpesaStkPayment->msisdn = $msisdn;
             $mpesaStkPayment->save();
 
-            return ['success' => 'Entry for ' . $transactionId . ' updated successfully'];
+            return [
+                'status' => 'success',
+                'message' => "Entry for $transactionId updated successfully"
+            ];
         } catch (\Exception $e) {
 
-            Log::channel('mpesa')->error('Failed to update entry for :' . $transactionId . ' - ' . $e->getMessage());
+            Log::channel('mpesa')->error("STK_CALLBACK_ERROR: Failed to update entry for {$transactionId} {$e->getMessage()}");
 
-            return ['error' => 'Failed to update Mpesa callback entry: ' . $e->getMessage()];
+            return [
+                'status' => 'error',
+                'message' => "Failed to update Mpesa callback entry: {$e->getMessage()}"
+
+            ];
         }
     }
 
@@ -164,26 +236,26 @@ class MpesaStkService
      * Saves STK Payment details to the database.
      *
      * @param array $data Array containing 'MerchantRequestID' and 'CheckoutRequestID'.
-     * @return array Success or error message indicating the result of the save operation.
+     * @return void
+     * @throws \Exception If saving fails.
      */
-    public function saveStkPayment(array $data,string $shortcode): array
+    private function saveStkPayment(array $data, string $shortcode): void
     {
         try {
             MpesaStkPayments::create([
                 'merchant_request_id' => $data['MerchantRequestID'],
                 'checkout_request_id' => $data['CheckoutRequestID'],
-                'shortcode' => $shortcode, 
+                'business_shortcode' => $shortcode,
             ]);
 
-            return ['success' => 'Saved Data for' . $data['CheckoutRequestID']];
+            Log::channel('mpesa')->info("STK: Payment Saved {$data['CheckoutRequestID']}");
         } catch (\Exception $e) {
-            Log::channel('mpesa')->error('Error saving STK Payment: ' . $e->getMessage());
 
-            return ['error' => 'Failed to save payment details' . $e->getMessage()];
+            Log::channel('mpesa')->error("STK_SAVE_ERROR: {$e->getMessage()}");
+
+            throw new \Exception('Failed to save payment details: ' . $e->getMessage());
         }
     }
-
-  
 
 
 
@@ -204,8 +276,8 @@ class MpesaStkService
 
         return [
 
-            'password'=>$password,
-            'timestamp'=>$timestamp
+            'password' => $password,
+            'timestamp' => $timestamp
         ];
     }
 
@@ -218,23 +290,14 @@ class MpesaStkService
      */
 
 
-    private function getAccessToken(string $consumerKey, string $consumerSecret): array|JsonResponse
+    private function getAccessToken(string $consumerKey, string $consumerSecret): array
     {
-
-        $url = env('SAF_AUTH_URL');
 
         $mpesaAuthService = new MpesaAuthService;
 
+        $url = env('SAF_AUTH_URL');
+
         $response = $mpesaAuthService->generateAccessToken($url, $consumerKey, $consumerSecret);
-
-        if (isset($response['error'])) {
-
-            $errorMessage = $response['error'];
-
-            Log::channel('mpesa')->error("STK- Failed to fetch access token: $errorMessage");
-
-            return ['error' => $response['error']];
-        }
 
         return $response;
     }

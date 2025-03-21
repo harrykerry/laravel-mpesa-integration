@@ -15,9 +15,7 @@ class MpesaCallBackService
 
      * @param array $data The callback data from M-PESA.
      * 
-     * @return array An associative array indicating the result of the operation. 
-     *               Contains either 'success' with a message or 'error' with an error message.
-     * @throws \Exception If an error occurs while saving the data to the database.
+     * @return array An associative array indicating the result of the operation.
      */
 
     public function handleCallBackData(array $data): array
@@ -41,8 +39,6 @@ class MpesaCallBackService
 
         try {
 
-            // Save the data to the database
-
             $mpesaConfirmation = new MpesaConfirmation();
             $mpesaConfirmation->transaction_type = $transactionType;
             $mpesaConfirmation->transaction_id = $transactionId;
@@ -59,15 +55,21 @@ class MpesaCallBackService
             $mpesaConfirmation->last_name = $lastName;
             $mpesaConfirmation->save();
 
-            Log::channel('mpesa')->info('Mpesa Data Saved. TransId - ' . $transactionId);
+            Log::channel('mpesa')->info("CALLBACK: Callback data received and saved for {$transactionId}");
 
-            return ['success' => 'Entry for ' . $transactionId . ' saved'];
+            return [
+                'status' => 'success',
+                'message' => 'Entry for ' . $transactionId . ' saved'
+            ];
         } catch (\Exception $e) {
 
             $errorMessage = $e->getMessage();
 
-            Log::channel('mpesa')->error('Error saving data for TransId ' . $transactionId . ': ' . $errorMessage);
-            return ['error' => $errorMessage];
+            Log::channel('mpesa')->error("CALLBACK_ERROR: Error saving data for {$transactionId} : " . $errorMessage);
+            return [
+                'status' => 'error',
+                'message' => $errorMessage
+            ];
         }
     }
 }

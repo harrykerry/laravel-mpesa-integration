@@ -17,28 +17,24 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
+// M-PESA C2B Confirmation Callback
+Route::post('/payments/c2b/confirmation/callback', [MpesaCallbackController::class, 'handleC2bCallback']);
 
-// M-PESA  Confirmation Callback 
-Route::post('/payments/confirmation/callback',[MpesaCallbackController::class,'handlec2bCallback']);
+// M-PESA C2B Validation Callback
+Route::post('/payments/c2b/validation/callback', [MpesaCallbackController::class, 'handleC2bValidation']);
 
-// M-PESA Validation Callback
-Route::post('/payments/validation/callback',[MpesaCallbackController::class,'handlec2bvalidation']);
-
-//Fetch M-PESA Records
+// Fetch M-PESA C2B Payments
 Route::get('/mpesa/payments/c2b',[MpesaDataFetchController::class,'fetchC2bPayments']);
 
 // Register M-PESA Callback
 Route::post('/mpesa/callback/register', [MpesaCallbackController::class,'registerCallback']);
 
-//Initiate an STK request
+// Initiate M-PESA STK Request
 Route::post('/mpesa/stk/initiate', [mpesaStkController::class, 'initiateStkRequest']);
 
-//Handle the callback data from M-PESA
+// Handle the M-PESA STK Callback
 Route::post('/mpesa/stk/callback', [mpesaStkController::class, 'handleStkCallback']);
 
-//Fetch M-PESA STK payments from the database
+// Fetch M-PESA STK Payments
 Route::get('/mpesa/payments/stk', [MpesaDataFetchController::class, 'fetchStkPayments']);
 
