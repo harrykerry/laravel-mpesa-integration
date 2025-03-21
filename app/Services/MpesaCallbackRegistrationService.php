@@ -11,6 +11,14 @@ use Illuminate\Support\Facades\Log;
 class MpesaCallbackRegistrationService
 {
 
+
+    protected MpesaAuthService $mpesaAuthService;
+
+    public function __construct(MpesaAuthService $mpesaAuthService)
+    {
+        $this->mpesaAuthService = $mpesaAuthService;
+    }
+
     /**
      * Register the M-PESA callback URLs with M-PESA.
      *
@@ -37,19 +45,14 @@ class MpesaCallbackRegistrationService
         $registerUrl = env('SAF_C2B_URL');
 
         try {
+            $response = $this->mpesaAuthService->generateAccessToken($authUrl, $consumerKey, $consumerSecret);
 
-            $authService = new MpesaAuthService;
+            if ($response['error'] === 'error') {
 
-            $response = $authService->generateAccessToken($authUrl, $consumerKey, $consumerSecret);
-
-            if (isset($response['error'])) {
-                $errorMessage = $response['error'];
-                Log::channel('mpesa')->error("Failed to fetch access token: $errorMessage");
-                return ['error' => $errorMessage];
+                return $response;
             }
 
             $accessToken = $response['access_token'];
-            
 
             $ch = curl_init();
 
@@ -72,22 +75,39 @@ class MpesaCallbackRegistrationService
             $response = curl_exec($ch);
 
             if (curl_errno($ch)) {
+
                 $errorMessage = curl_error($ch);
-                Log::error('Error registering M-PESA callback URL: ' . $errorMessage);
+
+                Log::channel('mpesa')->error("CALLBACK_REGISTRATION_ERROR: $errorMessage");
+
                 curl_close($ch);
-                return ['error' => $errorMessage];
+
+                return [
+                    'status' => 'error',
+                    'message' => $errorMessage
+                ];
             }
 
             $responseBody = json_decode($response, true);
+
             curl_close($ch);
 
-            Log::channel('mpesa')->info('Callback URL Registration', $responseBody);
+            Log::channel('mpesa')->info("CALLBACK_REGISTRATION:", $responseBody);
 
-            return ['success' => $responseBody];
+            return [
+                'status' => 'success',
+                'message' => $responseBody
+            ];
         } catch (\Exception $e) {
+
             $errorMessage = $e->getMessage();
-            Log::error('Error registering M-PESA callback URL: ' . $errorMessage);
-            return ['error' => $errorMessage];
+
+            Log::channel('mpesa')->error("CALLBACK_REGISTRATION_ERROR: $errorMessage");
+
+            return [
+                'status' => 'error',
+                'message' => $errorMessage
+            ];
         }
     }
 }

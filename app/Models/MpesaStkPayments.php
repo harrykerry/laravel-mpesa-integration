@@ -15,6 +15,7 @@ class MpesaStkPayments extends Model
         'transaction_id',
         'transaction_date',
         'amount',
-        'msisdn'
+        'msisdn',
+        'business_shortcode'
     ];
 }

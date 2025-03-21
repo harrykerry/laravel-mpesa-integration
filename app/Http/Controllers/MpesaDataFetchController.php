@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use App\Models\MpesaStkPayments;
 use App\Models\MpesaConfirmation;
+use App\Services\MpesaDataFetchService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Cache;
@@ -14,137 +15,84 @@ class MpesaDataFetchController extends Controller
 {
     //
 
-    // You can implement API authentication here to secure the fetch operation. 
+    protected MpesaDataFetchService $mpesaDataFetchService;
 
-    //You can also modify the fetch, mine was for a specific system.
 
+    public function __construct(MpesaDataFetchService $mpesaDataFetchService)
+    {
+        $this->mpesaDataFetchService = $mpesaDataFetchService;
+    }
 
     /**
-     * Fetches Mpesa confirmation records that have not been previously fetched.
-     *
+     * Fetch stored C2B transactions. 
      * @param \Illuminate\Http\Request $request The incoming HTTP request.
      * 
      * @return \Illuminate\Http\JsonResponse A JSON response containing the fetched records or an error message.
      * 
      */
 
-    public function fetchC2bPayments(Request $request):JsonResponse
+    public function fetchC2bPayments(Request $request): JsonResponse
     {
 
+        /**
+         * Implement your own validation logic as this fetch needs to be within a restrcition publicly.
+         * This example fetches by business shortcode. You an modify the fetch param  to work for you
+         * 
+         **/
 
-        try {
+        $requestData = Validator::make($request->all(), [
+            'shortcode' => 'required|numeric'
+        ]);
 
-            $shortcode = $request->query('shortcode');
+        if ($requestData->fails()) {
 
-            $validatedData = Validator::make($request->all(), [
-                'shortcode' => 'required|numeric|regex:/^[0-9]+$/'
-            ]);
-
-            if ($validatedData->fails()) {
-                return response()->json($validatedData->errors(), 422);
-            }
-
-            $requestData = $validatedData->validated();
-
-
-            $shortcode = $requestData['shortcode'];
-
-
-            $cacheKey = 'fetched_record_ids';
-
-            $lastFetchedId = Cache::get($cacheKey, 0);
-
-            $records = MpesaConfirmation::where('id', '>', $lastFetchedId)
-                ->where('business_shortcode', $shortcode)
-                ->get(['id', 'transaction_type', 'transaction_id', 'transaction_amount', 'business_shortcode', 'mobile_number', 'first_name']);
-
-            if ($records->isNotEmpty()) {
-
-                $newLastFetchedId = $records->max('id');
-
-                Cache::put($cacheKey, $newLastFetchedId);
-
-                Log::channel('mpesa')->info('C2B_Data_Fetch_Initiated:  ' . $records->max('id'));
-
-                return response()->json([
-                    'status' => 'success',
-                    'data' => $records
-                ], 200);
-            }
-
-            Log::channel('mpesa')->info('C2B_Data_Fetch_Initiated: No records found for' . $shortcode);
-
-            return response()->json([
-                'status' => 'success',
-                'message' => 'No records found',
-                'data' => []
-            ], 200);
-        } catch (\Exception $e) {
-
-            $errorMessage = $e->getMessage();
-
-            Log::channel('mpesa')->error('Error fetching records: ' . $errorMessage);
-
-            return response()->json([
-                'status' => 'error',
-                'message' => $errorMessage
-            ], 500);
+            return response()->json($requestData->errors()->first(), 422);
         }
+
+        $shortcode = $requestData['shortcode'];
+
+        $response = $this->mpesaDataFetchService->fetchPayments($shortcode);
+
+        if ($response['status'] === 'error') {
+            return response()->json($response, 500);
+        }
+
+        return response()->json($response, 200);
     }
 
 
     /**
-     * Fetch all M-PESA STK payments from the database.
-     *
+     * Fetch all successful M-PESA STK transactions for specific mobile number
+     * @param \Illuminate\Http\Request $request The incoming HTTP request.
      * @return \Illuminate\Http\JsonResponse 
      */
 
-    public function fetchStkPayments(Request $request):JsonResponse
+    public function fetchStkPayments(Request $request): JsonResponse
     {
-        try {
 
-            $shortcode = $request->query('shortcode');
+        /**
+         * Implement your own validation logic as this fetch needs to be within a restrcition publicly.
+         * This example fetches by mobile number. You an modify the fetch param  to work for you
+         * 
+         **/
 
-            $validatedData = Validator::make($request->all(), [
-                'shortcode' => 'required|numeric|regex:/^[0-9]+$/'
-            ]);
+        $requestData = Validator::make($request->all(), [
+            'mobile' => 'required|numeric|digits_between:10,12'
+        ]);
 
-            if ($validatedData->fails()) {
-                return response()->json($validatedData->errors(), 422);
-            }
+        if ($requestData->fails()) {
 
-            $requestData = $validatedData->validated();
-
-
-            $shortcode = $requestData['shortcode'];
-
-            $records = MpesaStkPayments::where('business_shortcode', $shortcode)
-                ->get();
-
-
-            if ($records->isNotEmpty()) {
-                Log::channel('mpesa')->info('STK_Data_Fetch_Initiated:  ' . $shortcode);
-                return response()->json([
-                    'status' => 'success',
-                    'data' => $records
-                ], 200);
-            } else {
-                Log::channel('mpesa')->info('STK_Data_Fetch_Initiated: No records found for: ' . $shortcode);
-
-                return response()->json([
-                    'status' => 'success',
-                    'message' => 'No records found',
-                    'data' => []
-                ], 200);
-            }
-        } catch (\Exception $e) {
-            Log::channel('mpesa')->error('Error fetching STK payments: ' . $e->getMessage());
-
-            $errorMessage = $e->getMessage();
-            return response()->json([
-                'status' => 'error',
-                'message' => $errorMessage
-            ], 500);
+            return response()->json($requestData->errors()->first(), 422);
         }
+
+        $msisdn = $requestData['mobile'];
+
+        $response = $this->mpesaDataFetchService->fetchStkPayments($msisdn);
+
+        if ($response['status'] === 'error') {
+            return response()->json($response, 500);
+        }
+
+        return response()->json($response, 200);
     }
 }

@@ -20,18 +20,14 @@ class MpesaAuthService
      * @return array The access token and expiry or an error message.
      */
 
-    public function generateAccessToken(string $url, string $consumerKey, string $consumerSecret): string|array
+    public function generateAccessToken(string $url, string $consumerKey, string $consumerSecret): array
     {
 
         try {
 
             $client = new Client();
 
-
-            // Create the Basic Auth token using the consumer key and secret
-
             $authToken = base64_encode("{$consumerKey}:{$consumerSecret}");
-
 
             $headers = [
                 'Authorization' => 'Basic ' . $authToken
@@ -45,18 +41,22 @@ class MpesaAuthService
 
             $responseBody = json_decode($response->getBody(), true);
 
-            Log::channel('mpesa')->info('Auth Token fetched');
+            Log::channel('mpesa')->info("AUTH_TOKEN: Token fetched");
 
             return [
                 'access_token' => $responseBody['access_token'],
                 'expires_in' => $responseBody['expires_in']
             ];
         } catch (\Exception $e) {
+
             $errorMessage = $e->getMessage();
 
-            Log::channel('mpesa')->error("Auth Error: " . $errorMessage);
+            Log::channel('mpesa')->error("AUTH_TOKEN_ERROR: $errorMessage");
 
-            return ['error' => $errorMessage];
+            return [
+                'status' => 'error',
+                'message' => $errorMessage
+            ];
         }
     }
 }

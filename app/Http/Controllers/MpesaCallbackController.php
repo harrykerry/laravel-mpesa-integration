@@ -13,6 +13,15 @@ class MpesaCallbackController extends Controller
 {
     //
 
+    protected MpesaCallbackRegistrationService $mpesaCallbackRegistration;
+    protected MpesaCallBackService $mpesaCallBackService;
+
+    public function __construct(MpesaCallbackRegistrationService $mpesaCallbackRegistration, MpesaCallBackService $mpesaCallBackService)
+    {
+        $this->mpesaCallbackRegistration = $mpesaCallbackRegistration;
+        $this->mpesaCallBackService = $mpesaCallBackService;
+    }
+
     /**
      * Handle the registration of M-PESA callback URLs.
      *
@@ -26,7 +35,7 @@ class MpesaCallbackController extends Controller
     {
 
 
-        $validateData = Validator::make($request->all(),[
+        $requestData = Validator::make($request->all(), [
             'confirmation_url' => 'required|url',
             'validation_url' => 'required|url',
             'consumer_key' => 'required|string',
@@ -34,90 +43,62 @@ class MpesaCallbackController extends Controller
             'shortcode' => 'required|numeric'
         ]);
 
-        if ($validateData->fails()) {
-            return response()->json($validateData->errors(), 422);
+        if ($requestData->fails()) {
+            return response()->json($requestData->errors(), 422);
         }
 
-        $requestData = $validateData->validated();
+        $callbackUrlData = $requestData->validated();
 
-        $callbackUrlData = [
-            'confirmation_url' => $requestData['confirmation_url'],
-            'validation_url' => $requestData['validation_url'],
-            'consumer_key' => $requestData['consumer_key'],
-            'consumer_secret' => $requestData['consumer_secret'],
-            'shortcode' => $requestData['shortcode'],
-        ];
+        $response = $this->mpesaCallbackRegistration->registerCallBackUrl($callbackUrlData);
 
-        $mpesaCallbackRegistration = new MpesaCallbackRegistrationService;
+        if ($response['status'] === 'error') {
 
-
-        $response = $mpesaCallbackRegistration->registerCallBackUrl($callbackUrlData);
-
-        if (isset($response['error'])) {
-            Log::channel('mpesa')->error('Callback URL registration failed: ' . $response['error']);
-
-            return response()->json([
-                'status' => 'error',
-                'message' => $response['error']
-            ], 500);
+            return response()->json($response, 500);
         }
 
-        return response()->json([
-            'status' => 'success',
-            'message' => $response['success'] ?? 'Callback URL registered successfully'
-        ], 200);
+        return response()->json($response, 200);
     }
 
 
     /**
-     * Handles the M-PESA C2B callback.
+     * Handles the M-PESA C2B callback data sent by Mpesa
  
      * @param \Illuminate\Http\Request $request The incoming HTTP request containing the callback data.
      * 
      * @return \Illuminate\Http\JsonResponse The response from the `MpesaCallBackService` after processing the callback data.
      */
 
-    public function handlec2bCallback(Request $request):JsonResponse
+    public function handlec2bCallback(Request $request): JsonResponse
     {
 
-        Log::channel('app')->info('CallBack_Initiated: ' . json_encode($request->all()));
+        $mpesaCallbackData = $request->all();
 
-        $mpesaData = $request->all();
+        $response = $this->mpesaCallBackService->handleCallBackData($mpesaCallbackData);
 
-        $mpesaCallBackService = new MpesaCallBackService();
+        if ($response['status'] === 'error') {
 
-        $response = $mpesaCallBackService->handleCallBackData($mpesaData);
-
-        if (isset($response['error'])) {
-            return response()->json([
-                'status' => 'error',
-                'message' => $response['error']
-            ], 400);
+            return response()->json($response, 500);
         }
 
-        return response()->json([
-            'status' => 'success',
-            'message' => $response['success']
-        ], 200);
+        return response()->json($response, 200);
     }
 
 
     /**
-     * Handles the M-PESA C2B validation callback.
+     * Handles the M-PESA C2B validation callback. Can perform further validation logic customized for specific use cases
  
      * @param \Illuminate\Http\Request $request The incoming HTTP request containing the validation data.
      * 
      * @return \Illuminate\Http\JsonResponse A JSON response indicating that the validation was accepted.
      */
 
-    public function handlec2bvalidation(Request $request):JsonResponse
+    public function handlec2bvalidation(Request $request): JsonResponse
     {
 
-        Log::channel('app')->info('Validation_Initiated: ' . json_encode($request->all()));
+        $mpesaCallbackData = $request->all(); //retrieve and pass to a service for any further custom logic before returing the response
 
         $response = [
-            //use ResultCode C2B00011 and ResultDesc Rejected to reject transactions
-            "ResultCode" => "0",
+            "ResultCode" => "0",  //use ResultCode C2B00011 and ResultDesc Rejected to reject transactions
             "ResultDesc" => "Accepted"
 
         ];
