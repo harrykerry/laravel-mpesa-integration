@@ -74,6 +74,83 @@ class MpesaStkService
     }
 
     /**
+     * Ask M-PESA what became of a push, instead of waiting for its callback.
+     *
+     * Useful when a callback never arrived, or when a frontend polls while
+     * the customer is still looking at the prompt. A push M-PESA is still
+     * processing is reported as pending rather than as a failure, and a
+     * final outcome is written to the push row if the callback has not
+     * already done it.
+     *
+     * @return array<string, string|int|null>
+     *
+     * @throws MpesaException
+     */
+    public function checkPushStatus(string $checkoutRequestId): array
+    {
+        $shortcode = (string) config('mpesa.stk.shortcode');
+        ['password' => $password, 'timestamp' => $timestamp] = $this->buildPassword(
+            $shortcode,
+            (string) config('mpesa.stk.passkey'),
+        );
+
+        try {
+            $response = $this->client->postToMpesa('stk_query', [
+                'BusinessShortCode' => $shortcode,
+                'Password' => $password,
+                'Timestamp' => $timestamp,
+                'CheckoutRequestID' => $checkoutRequestId,
+            ], failOnNonZeroCode: false);
+        } catch (MpesaException $e) {
+            // M-PESA reports a push it has not finished with as an error.
+            if ($e->errorCode === '500.001.1001') {
+                return [
+                    'checkout_request_id' => $checkoutRequestId,
+                    'status' => 'pending',
+                    'result_code' => null,
+                    'result_desc' => null,
+                    'mpesa_description' => 'The transaction is still being processed.',
+                ];
+            }
+
+            throw $e;
+        }
+
+        $resultCode = isset($response['ResultCode']) ? (int) $response['ResultCode'] : null;
+        $resultDesc = isset($response['ResultDesc']) ? (string) $response['ResultDesc'] : null;
+
+        $payment = MpesaStkPayment::query()
+            ->where('checkout_request_id', $checkoutRequestId)
+            ->first();
+
+        if ($payment && $resultCode !== null && $payment->result_code === null) {
+            $payment->fill([
+                'result_code' => $resultCode,
+                'result_desc' => $resultDesc,
+                'completed_at' => now(),
+            ])->save();
+
+            Log::channel('mpesa')->info('STK_QUERY: outcome written from a status query', [
+                'checkout_request_id' => $checkoutRequestId,
+                'result_code' => $resultCode,
+            ]);
+        }
+
+        return [
+            'checkout_request_id' => $checkoutRequestId,
+            'status' => $payment?->status ?? match ($resultCode) {
+                0 => 'paid',
+                null => 'pending',
+                default => 'failed',
+            },
+            'result_code' => $resultCode,
+            'result_desc' => $resultDesc,
+            'transaction_id' => $payment?->transaction_id,
+            'mpesa_description' => $resultDesc ?? 'Status retrieved',
+        ];
+    }
+
+    /**
      * Record the outcome M-PESA reports for a push we initiated.
      *
      * Runs on the queue: the endpoint has already acknowledged M-PESA. The

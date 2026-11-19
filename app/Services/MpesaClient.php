@@ -40,11 +40,12 @@ class MpesaClient
      *
      * @param  string  $endpoint  A key from config('mpesa.endpoints')
      * @param  array<string, mixed>  $payload
+     * @param  bool  $failOnNonZeroCode  False to return M-PESA's own failure code instead of raising.
      * @return array<string, mixed>
      *
      * @throws MpesaException
      */
-    public function postToMpesa(string $endpoint, array $payload): array
+    public function postToMpesa(string $endpoint, array $payload, bool $failOnNonZeroCode = true): array
     {
         $path = $this->endpointPath($endpoint);
         $reference = (string) Str::uuid();
@@ -63,7 +64,7 @@ class MpesaClient
             'body' => $this->redactSecrets((array) $response->json()),
         ]);
 
-        return $this->decodeResponse($endpoint, $response);
+        return $this->decodeResponse($endpoint, $response, $failOnNonZeroCode);
     }
 
     /**
@@ -173,7 +174,7 @@ class MpesaClient
      *
      * @throws MpesaException
      */
-    public function decodeResponse(string $endpoint, Response $response): array
+    public function decodeResponse(string $endpoint, Response $response, bool $failOnNonZeroCode = true): array
     {
         $body = (array) $response->json();
 
@@ -192,9 +193,14 @@ class MpesaClient
         }
 
         // Daraja answers 200 with a non-zero code when it rejects a request.
-        $code = $body['ResponseCode'] ?? $body['ResultCode'] ?? '0';
+        // A status query is the exception: there, a non-zero code is the
+        // answer the caller asked for.
+        // Success is zero, which Daraja writes as "0" on most products and
+        // as "00" on the QR API.
+        $code = (string) ($body['ResponseCode'] ?? $body['ResultCode'] ?? '0');
+        $succeeded = $code !== '' && ltrim($code, '0') === '';
 
-        if ((string) $code !== '0') {
+        if ($failOnNonZeroCode && !$succeeded) {
             throw MpesaException::requestFailed(
                 $endpoint,
                 (string) ($body['ResponseDescription'] ?? $body['ResultDesc'] ?? "M-PESA returned code {$code}"),

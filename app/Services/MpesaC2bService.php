@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Exceptions\MpesaException;
 use App\Jobs\ForwardConfirmedPayment;
 use App\Models\MpesaCallback;
 use App\Models\MpesaConfirmation;
 use App\Support\Msisdn;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Symfony\Component\HttpFoundation\Response as HttpStatus;
 use Throwable;
 
 /**
@@ -19,6 +21,50 @@ use Throwable;
  */
 class MpesaC2bService
 {
+    public function __construct(protected readonly MpesaClient $client) {}
+
+    /**
+     * Pretend a customer paid the shortcode, in the sandbox only.
+     *
+     * Safaricom's simulate endpoint exists so the confirmation flow can be
+     * exercised without a real handset. It does not exist in production,
+     * where a payment can only start with the customer.
+     *
+     * @return array<string, string|null>
+     *
+     * @throws MpesaException
+     */
+    public function simulateCustomerPayment(float|int $amount, string $msisdn, string $billReference = 'TEST'): array
+    {
+        if (config('mpesa.environment') !== 'sandbox') {
+            throw new MpesaException(
+                message: 'Payments can only be simulated in the sandbox.',
+                errorCode: 'simulation.not_available',
+                status: HttpStatus::HTTP_CONFLICT,
+            );
+        }
+
+        $response = $this->client->postToMpesa('c2b_simulate', [
+            'ShortCode' => (string) config('mpesa.c2b.shortcode'),
+            'CommandID' => (string) config('mpesa.stk.transaction_type') === 'CustomerBuyGoodsOnline'
+                ? 'CustomerBuyGoodsOnline'
+                : 'CustomerPayBillOnline',
+            'Amount' => (int) round((float) $amount),
+            'Msisdn' => Msisdn::normalize($msisdn),
+            'BillRefNumber' => $billReference,
+        ]);
+
+        return [
+            'conversation_id' => isset($response['ConversationID']) ? (string) $response['ConversationID'] : null,
+            'originator_conversation_id' => isset($response['OriginatorCoversationID'])
+                ? (string) $response['OriginatorCoversationID']
+                : null,
+            'mpesa_description' => isset($response['ResponseDescription'])
+                ? (string) $response['ResponseDescription']
+                : 'Payment simulated',
+        ];
+    }
+
     /**
      * Store the payment a recorded confirmation callback describes.
      *
