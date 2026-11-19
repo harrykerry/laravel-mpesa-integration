@@ -17,17 +17,17 @@ use Illuminate\Support\Facades\Route;
 |
 */
 
-// M-PESA C2B Confirmation Callback
+// M-PESA C2B confirmation callback
 Route::post('/payments/c2b/confirmation/callback', [MpesaCallbackController::class, 'handleC2bCallback']);
 
 // M-PESA C2B Validation Callback
 Route::post('/payments/c2b/validation/callback', [MpesaCallbackController::class, 'handleC2bValidation']);
 
 // Fetch M-PESA C2B Payments
-Route::get('/mpesa/payments/c2b',[MpesaDataFetchController::class,'fetchC2bPayments']);
+Route::get('/mpesa/payments/c2b', [MpesaDataFetchController::class, 'fetchC2bPayments']);
 
 // Register M-PESA Callback
-Route::post('/mpesa/callback/register', [MpesaCallbackController::class,'registerCallback']);
+Route::post('/mpesa/callback/register', [MpesaCallbackController::class, 'registerCallback']);
 
 // Initiate M-PESA STK Request
 Route::post('/mpesa/stk/initiate', [mpesaStkController::class, 'initiateStkRequest']);
@@ -37,4 +37,3 @@ Route::post('/mpesa/stk/callback', [mpesaStkController::class, 'handleStkCallbac
 
 // Fetch M-PESA STK Payments
 Route::get('/mpesa/payments/stk', [MpesaDataFetchController::class, 'fetchStkPayments']);
-

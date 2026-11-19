@@ -1,0 +1,245 @@
+<?php
+
+namespace App\Services;
+
+use App\Exceptions\MpesaException;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Http\Client\RequestException;
+use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use Psr\Log\LoggerInterface;
+
+/**
+ * The single way out to Safaricom Daraja.
+ *
+ * Every call is authenticated with a cached access token, bounded by the
+ * configured timeouts, retried only when retrying is safe, logged on the
+ * M-PESA channel with secrets redacted, and turned into a MpesaException
+ * when it does not succeed.
+ */
+class MpesaClient
+{
+    /**
+     * Request fields that must never reach a log.
+     */
+    protected const REDACTED = [
+        'Password',
+        'SecurityCredential',
+        'InitiatorName',
+        'access_token',
+        'Authorization',
+    ];
+
+    public function __construct(protected readonly MpesaAuthService $auth) {}
+
+    /**
+     * Post a payload to a named Daraja endpoint and return the decoded body.
+     *
+     * @param  string  $endpoint  A key from config('mpesa.endpoints')
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     *
+     * @throws MpesaException
+     */
+    public function post(string $endpoint, array $payload): array
+    {
+        $path = $this->path($endpoint);
+        $reference = (string) Str::uuid();
+
+        $this->log()->info("MPESA_REQUEST: {$endpoint}", [
+            'reference' => $reference,
+            'path' => $path,
+            'payload' => $this->redact($payload),
+        ]);
+
+        $response = $this->send($endpoint, fn (PendingRequest $request) => $request->post($path, $payload));
+
+        $this->log()->info("MPESA_RESPONSE: {$endpoint}", [
+            'reference' => $reference,
+            'status' => $response->status(),
+            'body' => $this->redact((array) $response->json()),
+        ]);
+
+        return $this->body($endpoint, $response);
+    }
+
+    /**
+     * Get a named Daraja endpoint and return the decoded body.
+     *
+     * @param  array<string, mixed>  $query
+     * @return array<string, mixed>
+     *
+     * @throws MpesaException
+     */
+    public function get(string $endpoint, array $query = []): array
+    {
+        $path = $this->path($endpoint);
+
+        $response = $this->send($endpoint, fn (PendingRequest $request) => $request->get($path, $query));
+
+        $this->log()->info("MPESA_RESPONSE: {$endpoint}", [
+            'status' => $response->status(),
+            'body' => $this->redact((array) $response->json()),
+        ]);
+
+        return $this->body($endpoint, $response);
+    }
+
+    /**
+     * The base URL of the active Daraja environment.
+     *
+     * @throws MpesaException
+     */
+    public static function baseUrl(): string
+    {
+        $environment = (string) config('mpesa.environment');
+        $baseUrl = config("mpesa.base_urls.{$environment}");
+
+        if (blank($baseUrl)) {
+            throw MpesaException::missingConfiguration("mpesa.base_urls.{$environment}");
+        }
+
+        return rtrim((string) $baseUrl, '/');
+    }
+
+    /**
+     * The absolute URL of a named endpoint.
+     *
+     * @throws MpesaException
+     */
+    public function url(string $endpoint): string
+    {
+        return self::baseUrl().'/'.$this->path($endpoint);
+    }
+
+    /**
+     * Send a request, turning transport failures into MpesaException.
+     *
+     * @param  callable(PendingRequest): Response  $send
+     *
+     * @throws MpesaException
+     */
+    protected function send(string $endpoint, callable $send): Response
+    {
+        try {
+            return $send($this->request());
+        } catch (ConnectionException $e) {
+            throw MpesaException::requestFailed(
+                $endpoint,
+                'the endpoint could not be reached',
+                'request.unreachable',
+                previous: $e,
+            );
+        } catch (RequestException $e) {
+            throw MpesaException::requestFailed($endpoint, $e->getMessage(), previous: $e);
+        }
+    }
+
+    /**
+     * A pending request carrying the token, timeouts and retry policy.
+     *
+     * @throws MpesaException
+     */
+    protected function request(): PendingRequest
+    {
+        return Http::baseUrl(self::baseUrl())
+            ->withToken($this->auth->token())
+            ->timeout((int) config('mpesa.http.timeout'))
+            ->connectTimeout((int) config('mpesa.http.connect_timeout'))
+            ->acceptJson()
+            ->asJson()
+            ->retry(
+                (int) config('mpesa.http.retries'),
+                (int) config('mpesa.http.retry_delay'),
+                // Retry only what is safe to repeat: a connection that never
+                // landed, a throttled request, or a Safaricom-side failure.
+                when: fn (\Throwable $e) => $e instanceof ConnectionException
+                    || ($e instanceof RequestException && in_array($e->response->status(), [429, 500, 502, 503, 504], true)),
+                throw: false,
+            );
+    }
+
+    /**
+     * Read the response body, failing on anything that is not a success.
+     *
+     * @return array<string, mixed>
+     *
+     * @throws MpesaException
+     */
+    protected function body(string $endpoint, Response $response): array
+    {
+        $body = (array) $response->json();
+
+        if ($response->failed()) {
+            $this->log()->error("MPESA_ERROR: {$endpoint}", [
+                'status' => $response->status(),
+                'body' => $this->redact($body) ?: $response->body(),
+            ]);
+
+            throw MpesaException::requestFailed(
+                $endpoint,
+                (string) ($body['errorMessage'] ?? "HTTP {$response->status()}"),
+                isset($body['errorCode']) ? (string) $body['errorCode'] : null,
+                ['status' => $response->status(), 'request_id' => $body['requestId'] ?? null],
+            );
+        }
+
+        // Daraja answers 200 with a non-zero code when it rejects a request.
+        $code = $body['ResponseCode'] ?? $body['ResultCode'] ?? '0';
+
+        if ((string) $code !== '0') {
+            throw MpesaException::requestFailed(
+                $endpoint,
+                (string) ($body['ResponseDescription'] ?? $body['ResultDesc'] ?? "M-PESA returned code {$code}"),
+                (string) $code,
+                ['body' => $this->redact($body)],
+            );
+        }
+
+        return $body;
+    }
+
+    /**
+     * Resolve a configured endpoint key to its path.
+     *
+     * @throws MpesaException
+     */
+    protected function path(string $endpoint): string
+    {
+        $path = config("mpesa.endpoints.{$endpoint}");
+
+        if (blank($path)) {
+            throw MpesaException::missingConfiguration("mpesa.endpoints.{$endpoint}");
+        }
+
+        return ltrim((string) $path, '/');
+    }
+
+    /**
+     * Replace secrets with a placeholder before anything is logged.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    protected function redact(array $payload): array
+    {
+        foreach (self::REDACTED as $field) {
+            if (array_key_exists($field, $payload)) {
+                $payload[$field] = '[redacted]';
+            }
+        }
+
+        return $payload;
+    }
+
+    /**
+     * The M-PESA log channel.
+     */
+    protected function log(): LoggerInterface
+    {
+        return Log::channel((string) config('mpesa.log_channel'));
+    }
+}

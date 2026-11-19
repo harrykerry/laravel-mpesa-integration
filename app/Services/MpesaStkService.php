@@ -2,288 +2,209 @@
 
 namespace App\Services;
 
+use App\Exceptions\MpesaException;
 use App\Models\MpesaStkPayment;
 use App\Traits\MobileFormattingTrait;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\Cache;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
+use Psr\Log\LoggerInterface;
 
+/**
+ * Initiates STK (Lipa na M-PESA Online) pushes and records their outcome.
+ *
+ * Shortcode, passkey and callback URL always come from configuration. A
+ * caller may choose the amount, the payer and the account reference, but
+ * never the credentials or the URL M-PESA calls back.
+ */
 class MpesaStkService
 {
     use MobileFormattingTrait;
 
+    public function __construct(protected readonly MpesaClient $client) {}
+
     /**
-     * Initiates an STK push request.
+     * Push a payment request to a customer's handset.
      *
-     * @param  array  $stkData  Array containing STK push data.
-     * @return array response or error message from the API.
+     * @param  array{amount: int|float|string, msisdn: string, account_reference?: string|null, transaction_desc?: string|null, transaction_type?: string|null, shortcode?: int|string|null, party_b?: int|string|null}  $data
+     * @return array<string, mixed>
+     *
+     * @throws MpesaException
      */
-    public function lipaNaMpesaStk(array $stkData): array
+    public function push(array $data): array
     {
-        try {
-            $consumerKey = $stkData['consumer_key'];
-            $consumerSecret = $stkData['consumer_secret'];
-            $shortCode = $stkData['shortcode'];
-            $passkey = $stkData['passkey'];
-            $amount = $stkData['amount'];
-            $partyA = $stkData['msisdn'];
-            $accountReference = $stkData['account_reference'];
-            $stkCallbackUrl = $stkData['stk_callback'];
-            $partyB = $stkData['organization_code'];
-            $transactionType = $stkData['transaction_type'];
-            $stkInitiateUrl = env('SAF_STK_URL');
+        $shortcode = $this->required($data['shortcode'] ?? config('mpesa.stk.shortcode'), 'mpesa.stk.shortcode');
+        $passkey = $this->required(config('mpesa.stk.passkey'), 'mpesa.stk.passkey');
+        $callbackUrl = $this->required(config('mpesa.callbacks.stk_url'), 'mpesa.callbacks.stk_url');
 
-            $passwordValues = $this->getPassword($shortCode, $passkey);
+        $msisdn = $this->sanitizeAndFormatMobile((string) $data['msisdn']);
+        $amount = (int) round((float) $data['amount']);
+        $reference = (string) ($data['account_reference'] ?? config('mpesa.stk.account_reference'));
 
-            $password = $passwordValues['password'];
-            $timestamp = $passwordValues['timestamp'];
+        ['password' => $password, 'timestamp' => $timestamp] = $this->password($shortcode, $passkey);
 
-            $accessToken = Cache::get('safaricom_stk_access_token');
+        $response = $this->client->post('stk_push', [
+            'BusinessShortCode' => $shortcode,
+            'Password' => $password,
+            'Timestamp' => $timestamp,
+            'TransactionType' => (string) ($data['transaction_type'] ?? config('mpesa.stk.transaction_type')),
+            'Amount' => $amount,
+            'PartyA' => $msisdn,
+            'PartyB' => (string) ($data['party_b'] ?? config('mpesa.stk.party_b') ?? $shortcode),
+            'PhoneNumber' => $msisdn,
+            'CallBackURL' => $callbackUrl,
+            'AccountReference' => $reference,
+            'TransactionDesc' => (string) ($data['transaction_desc'] ?? "Payment of {$amount} to {$shortcode}"),
+        ]);
 
-            if (! $accessToken) {
+        $this->recordPush($response, $shortcode, $msisdn, $amount);
 
-                $response = $this->getAccessToken($consumerKey, $consumerSecret);
-
-                if (isset($response['status']) && $response['status'] === 'error') {
-                    return $response;
-                }
-
-                $accessToken = $response['access_token'];
-                $expiry = $response['expires_in'];
-
-                Cache::put('safaricom_stk_access_token', $accessToken, now()->addSeconds($expiry));
-            }
-
-            $postData = [
-                'BusinessShortCode' => $shortCode,
-                'Password' => $password,
-                'Timestamp' => $timestamp,
-                'TransactionType' => $transactionType,
-                'Amount' => $amount,
-                'PartyA' => $partyA,
-                'PartyB' => $partyB,
-                'PhoneNumber' => $partyA,
-                'CallBackURL' => $stkCallbackUrl,
-                'AccountReference' => $accountReference,
-                'TransactionDesc' => $partyA.' has paid '.$amount.' to '.$shortCode,
-            ];
-
-            $requestHeaders = [
-                'Content-Type: application/json',
-                'Authorization: Bearer '.$accessToken,
-            ];
-
-            $ch = curl_init();
-
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $stkInitiateUrl,
-                CURLOPT_POST => true,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_HTTPHEADER => $requestHeaders,
-                CURLOPT_POSTFIELDS => json_encode($postData),
-            ]);
-
-            $response = curl_exec($ch);
-
-            if (curl_errno($ch)) {
-
-                $errorMessage = curl_error($ch);
-
-                Log::channel('mpesa')->error('STK_ERROR:'.$errorMessage);
-
-                curl_close($ch);
-
-                return [
-                    'status' => 'error',
-                    'message' => $errorMessage,
-                ];
-            }
-
-            $responseBody = json_decode($response, true);
-            Log::channel('mpesa')->info('STK: Request initiated', $responseBody);
-
-            curl_close($ch);
-
-            if (isset($responseBody['ResponseCode']) && $responseBody['ResponseCode'] === '0') {
-
-                $this->saveStkPayment($responseBody, $shortCode);
-
-                return [
-                    'status' => 'success',
-                    'message' => $responseBody,
-
-                ];
-            }
-
-            return [
-                'status' => 'error',
-                'message' => 'STK error: '.json_encode($responseBody),
-            ];
-        } catch (\Exception $e) {
-
-            $errorMessage = $e->getMessage();
-
-            Log::channel('mpesa')->error("STK_ERROR: $errorMessage");
-
-            return [
-                'status' => 'error',
-                'message' => $errorMessage,
-            ];
-        }
+        return $response;
     }
 
     /**
-     * Handles the M-PESA STK callback data and saves it to the database.
+     * Record the outcome M-PESA reports for a push we initiated.
      *
-     * @param  array  $data  An associative array containing M-PESA STK callback data.
-     *                       Expected keys: 'merchant_request_id', 'checkout_request_id',
-     *                       'transaction_id', 'transaction_date', 'amount', 'msisdn'.
-     * @return array An associative array indicating the result of the operation.
+     * @param  array<string, mixed>  $callbackData  The Body.stkCallback payload.
+     * @return array{status: string, message: string}
      */
     public function handleStkCallbackData(array $callbackData): array
     {
-
-        $merchantRequestId = $callbackData['MerchantRequestID'];
-        $checkoutRequestId = $callbackData['CheckoutRequestID'];
-        $resultCode = $callbackData['ResultCode'];
-        $resultDesc = $callbackData['ResultDesc'];
+        $merchantRequestId = (string) ($callbackData['MerchantRequestID'] ?? '');
+        $checkoutRequestId = (string) ($callbackData['CheckoutRequestID'] ?? '');
+        $resultCode = (int) ($callbackData['ResultCode'] ?? -1);
+        $resultDesc = (string) ($callbackData['ResultDesc'] ?? 'No result description');
 
         if ($resultCode !== 0) {
+            $this->log()->warning('STK_CALLBACK: push was not completed', [
+                'merchant_request_id' => $merchantRequestId,
+                'checkout_request_id' => $checkoutRequestId,
+                'result_code' => $resultCode,
+                'result_desc' => $resultDesc,
+            ]);
 
-            Log::channel('mpesa')->error("STK_CALLBACK_ERROR - Failed with code $resultCode - $resultDesc");
-
-            return [
-                'status' => 'error',
-                'message' => $resultDesc,
-            ];
+            return ['status' => 'error', 'message' => $resultDesc];
         }
 
-        $callbackMetadata = $callbackData['CallbackMetadata']['Item'];
-
-        $amount = null;
-        $transactionDate = null;
-        $msisdn = null;
-        $transactionId = null;
-
-        foreach ($callbackMetadata as $item) {
-            switch ($item['Name']) {
-                case 'Amount':
-                    $amount = $item['Value'];
-                    break;
-                case 'MpesaReceiptNumber':
-                    $transactionId = $item['Value'];
-                    break;
-                case 'TransactionDate':
-                    $transactionDate = $item['Value'];
-                    break;
-                case 'PhoneNumber':
-                    $msisdn = $this->sanitizeAndFormatMobile($item['Value']);
-                    break;
-                default:
-                    break;
-            }
-        }
-
-        $mpesaStkPayment = MpesaStkPayment::query()
+        $payment = MpesaStkPayment::query()
             ->forRequest($merchantRequestId, $checkoutRequestId)
             ->first();
 
-        if (! $mpesaStkPayment) {
-
-            Log::channel('mpesa')->error("STK_CALLBACK_ERROR: Record was not saved initially for $merchantRequestId  and CheckoutRequestID $checkoutRequestId");
-
-            return [
-                'status' => 'error',
-                'message' => "Record not found for $merchantRequestId",
-            ];
-        }
-
-        try {
-
-            $mpesaStkPayment->transaction_id = $transactionId;
-            $mpesaStkPayment->transaction_date = $transactionDate;
-            $mpesaStkPayment->amount = $amount;
-            $mpesaStkPayment->msisdn = $msisdn;
-            $mpesaStkPayment->save();
-
-            return [
-                'status' => 'success',
-                'message' => "Entry for $transactionId updated successfully",
-            ];
-        } catch (\Exception $e) {
-
-            Log::channel('mpesa')->error("STK_CALLBACK_ERROR: Failed to update entry for {$transactionId} {$e->getMessage()}");
-
-            return [
-                'status' => 'error',
-                'message' => "Failed to update Mpesa callback entry: {$e->getMessage()}",
-
-            ];
-        }
-    }
-
-    /**
-     * Saves STK Payment details to the database.
-     *
-     * @param  array  $data  Array containing 'MerchantRequestID' and 'CheckoutRequestID'.
-     *
-     * @throws \Exception If saving fails.
-     */
-    private function saveStkPayment(array $data, string $shortcode): void
-    {
-        try {
-            MpesaStkPayment::create([
-                'merchant_request_id' => $data['MerchantRequestID'],
-                'checkout_request_id' => $data['CheckoutRequestID'],
-                'business_shortcode' => $shortcode,
+        if (! $payment) {
+            $this->log()->error('STK_CALLBACK: no push was recorded for this callback', [
+                'merchant_request_id' => $merchantRequestId,
+                'checkout_request_id' => $checkoutRequestId,
             ]);
 
-            Log::channel('mpesa')->info("STK: Payment Saved {$data['CheckoutRequestID']}");
-        } catch (\Exception $e) {
-
-            Log::channel('mpesa')->error("STK_SAVE_ERROR: {$e->getMessage()}");
-
-            throw new \Exception('Failed to save payment details: '.$e->getMessage());
+            return ['status' => 'error', 'message' => "Record not found for {$merchantRequestId}"];
         }
+
+        $metadata = $this->metadata($callbackData);
+
+        $payment->fill([
+            'transaction_id' => $metadata['MpesaReceiptNumber'] ?? null,
+            'transaction_date' => $metadata['TransactionDate'] ?? null,
+            'amount' => $metadata['Amount'] ?? $payment->amount,
+            'msisdn' => isset($metadata['PhoneNumber'])
+                ? $this->sanitizeAndFormatMobile((string) $metadata['PhoneNumber'])
+                : $payment->msisdn,
+        ])->save();
+
+        $this->log()->info('STK_CALLBACK: payment confirmed', [
+            'transaction_id' => $payment->transaction_id,
+            'checkout_request_id' => $checkoutRequestId,
+        ]);
+
+        return ['status' => 'success', 'message' => "Entry for {$payment->transaction_id} updated successfully"];
     }
 
     /**
-     * Generates the M-PESA password.
+     * Flatten M-PESA's CallbackMetadata list into a keyed array.
      *
-     * @param  int  $shortCode  The short code for the transaction.
-     * @param  string  $passkey  The passkey for the transaction.
-     * @return array The encoded password and timestamp
+     * @param  array<string, mixed>  $callbackData
+     * @return array<string, mixed>
      */
-    private function getPassword(int $shortCode, string $passkey): array
+    protected function metadata(array $callbackData): array
     {
+        return collect($callbackData['CallbackMetadata']['Item'] ?? [])
+            ->filter(fn ($item) => is_array($item) && isset($item['Name']))
+            ->mapWithKeys(fn (array $item) => [$item['Name'] => $item['Value'] ?? null])
+            ->all();
+    }
 
-        $timestamp = Carbon::now()->format('YmdHis');
+    /**
+     * Save the push M-PESA accepted so its callback can be matched to it.
+     *
+     * @param  array<string, mixed>  $response
+     */
+    protected function recordPush(array $response, string $shortcode, string $msisdn, int $amount): void
+    {
+        $merchantRequestId = $response['MerchantRequestID'] ?? null;
+        $checkoutRequestId = $response['CheckoutRequestID'] ?? null;
 
-        $password = base64_encode($shortCode.$passkey.$timestamp);
+        // Without both ids the callback could never be matched to this push.
+        if (blank($merchantRequestId) || blank($checkoutRequestId)) {
+            $this->log()->critical('STK: push accepted without request ids, cannot be reconciled', [
+                'msisdn' => $msisdn,
+                'amount' => $amount,
+                'response' => $response,
+            ]);
+
+            return;
+        }
+
+        MpesaStkPayment::query()->updateOrCreate(
+            [
+                'merchant_request_id' => $merchantRequestId,
+                'checkout_request_id' => $checkoutRequestId,
+            ],
+            [
+                'business_shortcode' => $shortcode,
+                'msisdn' => $msisdn,
+                'amount' => $amount,
+            ],
+        );
+
+        $this->log()->info('STK: push accepted by M-PESA', [
+            'checkout_request_id' => $checkoutRequestId,
+            'msisdn' => $msisdn,
+            'amount' => $amount,
+        ]);
+    }
+
+    /**
+     * Build the Lipa na M-PESA password and the timestamp it is bound to.
+     *
+     * @return array{password: string, timestamp: string}
+     */
+    protected function password(string $shortcode, string $passkey): array
+    {
+        $timestamp = CarbonImmutable::now()->format('YmdHis');
 
         return [
-
-            'password' => $password,
+            'password' => base64_encode($shortcode.$passkey.$timestamp),
             'timestamp' => $timestamp,
         ];
     }
 
     /**
-     * Fetches the access token from M-PESA.
+     * Fail loudly when a value M-PESA needs has not been configured.
      *
-     * @param  string  $consumerKey  The consumer key for the API.
-     * @param  string  $consumerSecret  The consumer secret for the API.
-     * @return array The response containing the access token or an error message.
+     * @throws MpesaException
      */
-    private function getAccessToken(string $consumerKey, string $consumerSecret): array
+    protected function required(mixed $value, string $key): string
     {
+        if (blank($value)) {
+            throw MpesaException::missingConfiguration($key);
+        }
 
-        $mpesaAuthService = new MpesaAuthService;
+        return (string) $value;
+    }
 
-        $url = env('SAF_AUTH_URL');
-
-        $response = $mpesaAuthService->generateAccessToken($url, $consumerKey, $consumerSecret);
-
-        return $response;
+    /**
+     * The M-PESA log channel.
+     */
+    protected function log(): LoggerInterface
+    {
+        return Log::channel((string) config('mpesa.log_channel'));
     }
 }

@@ -2,61 +2,153 @@
 
 namespace App\Services;
 
-use GuzzleHttp\Client;
+use App\Exceptions\MpesaException;
+use BadMethodCallException;
+use Illuminate\Contracts\Cache\LockTimeoutException;
+use Illuminate\Contracts\Cache\Repository as CacheRepository;
+use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
+/**
+ * Issues and caches Daraja OAuth access tokens.
+ *
+ * Credentials come from configuration only. Tokens live for an hour and the
+ * token endpoint is rate limited, so a token is cached and shared by every
+ * request until shortly before M-PESA expires it.
+ */
 class MpesaAuthService
-
-
 {
+    /**
+     * Get a usable access token, fetching a new one only when needed.
+     *
+     * @throws MpesaException
+     */
+    public function token(bool $forceFresh = false): string
+    {
+        $cache = $this->cache();
+        $key = (string) config('mpesa.token.key');
 
+        if ($forceFresh) {
+            $cache->forget($key);
+        } elseif (filled($token = $cache->get($key))) {
+            return (string) $token;
+        }
+
+        return $this->withoutStampede($key, function () use ($cache, $key): string {
+            if (filled($token = $cache->get($key))) {
+                return (string) $token;
+            }
+
+            ['access_token' => $token, 'expires_in' => $expiresIn] = $this->requestToken();
+
+            $cache->put($key, $token, now()->addSeconds($expiresIn));
+
+            return $token;
+        });
+    }
 
     /**
-     * Generate an access token from M-PESA API.
-     *
-     * @param string $url The URL to request the token from.
-     * @param string $consumerKey Your M-PESA consumer key.
-     * @param string $consumerSecret Your M-PESA consumer secret.
-     * @return array The access token and expiry or an error message.
+     * Forget the cached token, so the next call fetches a new one.
      */
-
-    public function generateAccessToken(string $url, string $consumerKey, string $consumerSecret): array
+    public function forgetToken(): void
     {
+        $this->cache()->forget((string) config('mpesa.token.key'));
+    }
+
+    /**
+     * Ask Daraja for a new access token.
+     *
+     * @return array{access_token: string, expires_in: int}
+     *
+     * @throws MpesaException
+     */
+    protected function requestToken(): array
+    {
+        $key = config('mpesa.credentials.consumer_key');
+        $secret = config('mpesa.credentials.consumer_secret');
+
+        if (blank($key) || blank($secret)) {
+            throw MpesaException::missingConfiguration('mpesa.credentials');
+        }
 
         try {
+            $response = Http::baseUrl(MpesaClient::baseUrl())
+                ->withBasicAuth($key, $secret)
+                ->timeout((int) config('mpesa.http.timeout'))
+                ->connectTimeout((int) config('mpesa.http.connect_timeout'))
+                ->retry(
+                    (int) config('mpesa.http.retries'),
+                    (int) config('mpesa.http.retry_delay'),
+                    throw: false,
+                )
+                ->acceptJson()
+                ->get((string) config('mpesa.endpoints.oauth'));
+        } catch (ConnectionException $e) {
+            throw MpesaException::authenticationFailed('the token endpoint could not be reached', previous: $e);
+        }
 
-            $client = new Client();
-
-            $authToken = base64_encode("{$consumerKey}:{$consumerSecret}");
-
-            $headers = [
-                'Authorization' => 'Basic ' . $authToken
-            ];
-
-
-            $response = $client->get($url, [
-                'headers' => $headers,
+        if ($response->failed()) {
+            Log::channel((string) config('mpesa.log_channel'))->error('AUTH_TOKEN_ERROR', [
+                'status' => $response->status(),
+                'body' => $response->json() ?? $response->body(),
             ]);
 
-
-            $responseBody = json_decode($response->getBody(), true);
-
-            Log::channel('mpesa')->info("AUTH_TOKEN: Token fetched");
-
-            return [
-                'access_token' => $responseBody['access_token'],
-                'expires_in' => $responseBody['expires_in']
-            ];
-        } catch (\Exception $e) {
-
-            $errorMessage = $e->getMessage();
-
-            Log::channel('mpesa')->error("AUTH_TOKEN_ERROR: $errorMessage");
-
-            return [
-                'status' => 'error',
-                'message' => $errorMessage
-            ];
+            throw MpesaException::authenticationFailed(
+                "the token endpoint returned HTTP {$response->status()}",
+                ['status' => $response->status()],
+            );
         }
+
+        $token = $response->json('access_token');
+
+        if (! is_string($token) || $token === '') {
+            throw MpesaException::authenticationFailed('the token endpoint returned no access token');
+        }
+
+        Log::channel((string) config('mpesa.log_channel'))->info('AUTH_TOKEN: token issued', [
+            'expires_in' => $response->json('expires_in'),
+        ]);
+
+        return [
+            'access_token' => $token,
+            'expires_in' => $this->lifetime((int) $response->json('expires_in', 3600)),
+        ];
+    }
+
+    /**
+     * How long to keep a token, kept short of the lifetime M-PESA reported.
+     */
+    protected function lifetime(int $expiresIn): int
+    {
+        return max(60, $expiresIn - (int) config('mpesa.token.leeway'));
+    }
+
+    /**
+     * Run the fetch behind a lock so concurrent requests issue one token.
+     *
+     * Falls back to fetching directly on cache stores without locks.
+     *
+     * @template TValue
+     *
+     * @param  callable(): TValue  $callback
+     * @return TValue
+     */
+    protected function withoutStampede(string $key, callable $callback): mixed
+    {
+        try {
+            return $this->cache()->lock("{$key}:lock", 15)->block(10, $callback);
+        } catch (BadMethodCallException|LockTimeoutException) {
+            return $callback();
+        }
+    }
+
+    /**
+     * The cache store tokens are kept in.
+     */
+    protected function cache(): CacheRepository
+    {
+        return Cache::store(config('mpesa.token.store'));
     }
 }

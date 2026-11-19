@@ -2,91 +2,45 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
 use App\Services\MpesaStkService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Facades\Log;
-use App\Traits\MobileFormattingTrait;
-use Illuminate\Support\Facades\Validator;
+use Illuminate\Http\Request;
 
+/**
+ * Initiates STK pushes and receives their callbacks.
+ */
 class mpesaStkController extends Controller
 {
-    //
-
-    protected MpesaStkService $mpesaStkService;
-
-    use MobileFormattingTrait;
-
-    public function __construct(MpesaStkService $mpesaStkService)
-    {
-        $this->mpesaStkService = $mpesaStkService;
-    }
-
+    public function __construct(protected readonly MpesaStkService $stk) {}
 
     /**
-     * Initiates an M-PESA STK request.
+     * Push a payment request to a customer's handset.
      *
-     * @param Request $request The incoming request containing STK data.
-     * @return \Illuminate\Http\JsonResponse JSON response with API result or error message.
+     * The request carries only who is paying and how much. The shortcode,
+     * passkey, transaction type, account reference and callback URL are all
+     * backend configuration; anything else in the payload is ignored.
      */
-
     public function initiateStkRequest(Request $request): JsonResponse
     {
-
-        $requestData = Validator::make($request->all(), [
-
-            'consumer_key' => 'required|string',
-            'consumer_secret' => 'required|string',
-            'shortcode' => 'required|string',
-            'passkey' => 'required|string',
-            'amount' => 'required|numeric',
-            'msisdn' => 'required|numeric',
-            'account_reference' => 'required|string',
-            'stk_callback' => 'required|string',
-            'organization_code' => 'required|string', //till or paybill
-            'transaction_type' => 'required|string', //use CustomerBuyGoodsOnline for paybill and CustomerPayBillOnline for till
-
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'min:1'],
+            'msisdn' => ['required', 'string', 'regex:/^(?:\+?254|0)?(?:7|1)\d{8}$/'],
         ]);
 
-        if ($requestData->fails()) {
-            return response()->json($requestData->errors()->first(), 422);
-        }
-
-        $stkData = $requestData->validated();
-
-        $stkData['msisdn'] = $this->sanitizeAndFormatMobile($stkData['msisdn']);
-
-
-        $response = $this->mpesaStkService->lipaNaMpesaStk($stkData);
-
-        if ($response['status'] === 'error') {
-
-            return response()->json($response, 500);
-        }
-
-        return response()->json($response, 200);
+        return response()->json([
+            'status' => 'success',
+            'message' => 'STK push sent',
+            'data' => $this->stk->push($data),
+        ]);
     }
 
-
     /**
-     * Handle M-PESA STK callback data.
-     *
-     * @param Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * Record the outcome of a push M-PESA has finished processing.
      */
-
     public function handleStkCallback(Request $request): JsonResponse
     {
+        $response = $this->stk->handleStkCallbackData($request->input('Body.stkCallback', []));
 
-        $callbackData = $request->input('Body.stkCallback', []);
-
-        $response = $this->mpesaStkService->handleStkCallbackData($callbackData);
-
-        if ($response['status'] === 'error') {
-
-            return response()->json($response, 500);
-        }
-
-        return response()->json($response, 200);
+        return response()->json($response, $response['status'] === 'error' ? 500 : 200);
     }
 }

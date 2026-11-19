@@ -1,113 +1,54 @@
 <?php
 
-
 namespace App\Services;
 
-use GuzzleHttp\Client;
-use Illuminate\Support\Env;
-use Illuminate\Support\Facades\Log;
+use App\Exceptions\MpesaException;
 
-
+/**
+ * Registers this application's C2B confirmation and validation URLs with M-PESA.
+ */
 class MpesaCallbackRegistrationService
 {
+    public function __construct(protected readonly MpesaClient $client) {}
 
-
-    protected MpesaAuthService $mpesaAuthService;
-
-    public function __construct(MpesaAuthService $mpesaAuthService)
+    /**
+     * Register the callback URLs for a shortcode.
+     *
+     * Everything defaults to configuration; a caller may only override the
+     * shortcode, the two URLs and the response type.
+     *
+     * @param  array{shortcode?: int|string|null, confirmation_url?: string|null, validation_url?: string|null, response_type?: string|null}  $overrides
+     * @return array<string, mixed>
+     *
+     * @throws MpesaException
+     */
+    public function registerUrls(array $overrides = []): array
     {
-        $this->mpesaAuthService = $mpesaAuthService;
+        return $this->client->post('register_url', [
+            'ShortCode' => $this->required($overrides['shortcode'] ?? config('mpesa.c2b.shortcode'), 'mpesa.c2b.shortcode'),
+            'ResponseType' => $overrides['response_type'] ?? config('mpesa.c2b.response_type'),
+            'ConfirmationURL' => $this->required(
+                $overrides['confirmation_url'] ?? config('mpesa.callbacks.confirmation_url'),
+                'mpesa.callbacks.confirmation_url',
+            ),
+            'ValidationURL' => $this->required(
+                $overrides['validation_url'] ?? config('mpesa.callbacks.validation_url'),
+                'mpesa.callbacks.validation_url',
+            ),
+        ]);
     }
 
     /**
-     * Register the M-PESA callback URLs with M-PESA.
+     * Fail loudly when a value M-PESA needs has not been configured.
      *
-     * @param array $callbackUrlData An associative array containing callback URL data:
-     *                                - 'confirmation_url' (string)
-     *                                - 'validation_url' (string)
-     *                                - 'consumer_key' (string)
-     *                                - 'consumer_secret' (string)
-     *                                - 'shortcode' (int)
-     *
-     * @return array The response from the M-PESA API or an error message.
+     * @throws MpesaException
      */
-
-
-    public function registerCallBackUrl(array $callbackUrlData): array
+    protected function required(mixed $value, string $key): string
     {
-
-        $confirmationUrl = $callbackUrlData['confirmation_url'];
-        $validationUrl = $callbackUrlData['validation_url'];
-        $consumerKey = $callbackUrlData['consumer_key'];
-        $consumerSecret = $callbackUrlData['consumer_secret'];
-        $shortcode = $callbackUrlData['shortcode'];
-        $authUrl = env('SAF_AUTH_URL');
-        $registerUrl = env('SAF_C2B_URL');
-
-        try {
-            $response = $this->mpesaAuthService->generateAccessToken($authUrl, $consumerKey, $consumerSecret);
-
-            if ($response['error'] === 'error') {
-
-                return $response;
-            }
-
-            $accessToken = $response['access_token'];
-
-            $ch = curl_init();
-
-            $postData = json_encode([
-                'ShortCode' => $shortcode,
-                'ResponseType' => 'Completed',
-                'ConfirmationURL' => $confirmationUrl,
-                'ValidationURL' => $validationUrl
-            ]);
-
-            curl_setopt($ch, CURLOPT_URL, $registerUrl);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_HTTPHEADER, [
-                'Authorization: Bearer ' . $accessToken,
-                'Content-Type: application/json'
-            ]);
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
-
-            $response = curl_exec($ch);
-
-            if (curl_errno($ch)) {
-
-                $errorMessage = curl_error($ch);
-
-                Log::channel('mpesa')->error("CALLBACK_REGISTRATION_ERROR: $errorMessage");
-
-                curl_close($ch);
-
-                return [
-                    'status' => 'error',
-                    'message' => $errorMessage
-                ];
-            }
-
-            $responseBody = json_decode($response, true);
-
-            curl_close($ch);
-
-            Log::channel('mpesa')->info("CALLBACK_REGISTRATION:", $responseBody);
-
-            return [
-                'status' => 'success',
-                'message' => $responseBody
-            ];
-        } catch (\Exception $e) {
-
-            $errorMessage = $e->getMessage();
-
-            Log::channel('mpesa')->error("CALLBACK_REGISTRATION_ERROR: $errorMessage");
-
-            return [
-                'status' => 'error',
-                'message' => $errorMessage
-            ];
+        if (blank($value)) {
+            throw MpesaException::missingConfiguration($key);
         }
+
+        return (string) $value;
     }
 }
