@@ -415,7 +415,7 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
             @error('amount') <p class="mt-2 text-sm text-red-700">{{ $message }}</p> @enderror
             @error('msisdn') <p class="mt-2 text-sm text-red-700">{{ $message }}</p> @enderror
         @else
-            <p class="mt-6 border-l-2 border-amber-500 bg-amber-100/50 px-4 py-3 text-sm text-stone-700">
+            <p class="mt-6 rounded bg-amber-100/50 px-4 py-3 text-sm text-stone-700">
                 The demo is off. It needs <code>MPESA_DEMO_ENABLED=true</code>, the sandbox environment and sandbox
                 credentials, so it cannot fire a real payment request by accident.
             </p>
