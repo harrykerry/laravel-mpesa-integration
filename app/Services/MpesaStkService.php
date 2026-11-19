@@ -6,8 +6,9 @@ use App\Exceptions\MpesaException;
 use App\Models\MpesaStkPayment;
 use App\Support\Msisdn;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
-use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * Initiates STK (Lipa na M-PESA Online) pushes and records their outcome.
@@ -21,17 +22,19 @@ class MpesaStkService
     public function __construct(protected readonly MpesaClient $client) {}
 
     /**
-     * Push a payment request to a customer's handset.
+     * Ask M-PESA to prompt a customer to pay.
      *
      * The caller supplies only the payer and the amount. The shortcode,
      * passkey, party B, transaction type, account reference and callback URL
-     * are read from configuration.
+     * are read from configuration. M-PESA's own body is logged, not
+     * returned: the caller gets the two ids needed to follow the payment up,
+     * plus the message Safaricom wants shown to the customer.
      *
-     * @return array<string, mixed>
+     * @return array<string, string|null>
      *
      * @throws MpesaException
      */
-    public function push(float|int|string $amount, string $msisdn): array
+    public function initiatePush(float|int|string $amount, string $msisdn): array
     {
         $shortcode = (string) config('mpesa.stk.shortcode');
         $passkey = (string) config('mpesa.stk.passkey');
@@ -39,9 +42,9 @@ class MpesaStkService
         $msisdn = Msisdn::normalize($msisdn);
         $amount = (int) round((float) $amount);
 
-        ['password' => $password, 'timestamp' => $timestamp] = $this->password($shortcode, $passkey);
+        ['password' => $password, 'timestamp' => $timestamp] = $this->buildPassword($shortcode, $passkey);
 
-        $response = $this->client->post('stk_push', [
+        $response = $this->client->postToMpesa('stk_push', [
             'BusinessShortCode' => $shortcode,
             'Password' => $password,
             'Timestamp' => $timestamp,
@@ -55,9 +58,15 @@ class MpesaStkService
             'TransactionDesc' => (string) config('mpesa.stk.account_reference'),
         ]);
 
-        $this->recordPush($response, $shortcode, $msisdn, $amount);
+        $this->recordInitiatedPush($response, $shortcode, $msisdn, $amount);
 
-        return $response;
+        return [
+            'merchant_request_id' => isset($response['MerchantRequestID']) ? (string) $response['MerchantRequestID'] : null,
+            'checkout_request_id' => isset($response['CheckoutRequestID']) ? (string) $response['CheckoutRequestID'] : null,
+            'customer_message' => isset($response['CustomerMessage'])
+                ? (string) $response['CustomerMessage']
+                : 'A payment request has been sent to the customer.',
+        ];
     }
 
     /**
@@ -74,7 +83,7 @@ class MpesaStkService
         $resultDesc = (string) ($callbackData['ResultDesc'] ?? 'No result description');
 
         if ($resultCode !== 0) {
-            $this->log()->warning('STK_CALLBACK: push was not completed', [
+            Log::channel((string) config('mpesa.log_channel'))->warning('STK_CALLBACK: push was not completed', [
                 'merchant_request_id' => $merchantRequestId,
                 'checkout_request_id' => $checkoutRequestId,
                 'result_code' => $resultCode,
@@ -89,7 +98,7 @@ class MpesaStkService
             ->first();
 
         if (! $payment) {
-            $this->log()->error('STK_CALLBACK: no push was recorded for this callback', [
+            Log::channel((string) config('mpesa.log_channel'))->error('STK_CALLBACK: no push was recorded for this callback', [
                 'merchant_request_id' => $merchantRequestId,
                 'checkout_request_id' => $checkoutRequestId,
             ]);
@@ -97,7 +106,7 @@ class MpesaStkService
             return ['status' => 'error', 'message' => "Record not found for {$merchantRequestId}"];
         }
 
-        $metadata = $this->metadata($callbackData);
+        $metadata = $this->extractCallbackMetadata($callbackData);
 
         $payment->fill([
             'transaction_id' => $metadata['MpesaReceiptNumber'] ?? null,
@@ -108,7 +117,7 @@ class MpesaStkService
                 : $payment->msisdn,
         ])->save();
 
-        $this->log()->info('STK_CALLBACK: payment confirmed', [
+        Log::channel((string) config('mpesa.log_channel'))->info('STK_CALLBACK: payment confirmed', [
             'transaction_id' => $payment->transaction_id,
             'checkout_request_id' => $checkoutRequestId,
         ]);
@@ -122,7 +131,7 @@ class MpesaStkService
      * @param  array<string, mixed>  $callbackData
      * @return array<string, mixed>
      */
-    protected function metadata(array $callbackData): array
+    public function extractCallbackMetadata(array $callbackData): array
     {
         return collect($callbackData['CallbackMetadata']['Item'] ?? [])
             ->filter(fn ($item) => is_array($item) && isset($item['Name']))
@@ -133,41 +142,60 @@ class MpesaStkService
     /**
      * Save the push M-PESA accepted so its callback can be matched to it.
      *
+     * M-PESA has already prompted the customer by the time this runs, so a
+     * database failure here must not turn into a failed response: the push
+     * is real either way. It is logged as critical instead, and the raw
+     * callback is still kept when it arrives.
+     *
      * @param  array<string, mixed>  $response
      */
-    protected function recordPush(array $response, string $shortcode, string $msisdn, int $amount): void
+    public function recordInitiatedPush(array $response, string $shortcode, string $msisdn, int $amount): ?MpesaStkPayment
     {
         $merchantRequestId = $response['MerchantRequestID'] ?? null;
         $checkoutRequestId = $response['CheckoutRequestID'] ?? null;
 
         // Without both ids the callback could never be matched to this push.
         if (blank($merchantRequestId) || blank($checkoutRequestId)) {
-            $this->log()->critical('STK: push accepted without request ids, cannot be reconciled', [
+            Log::channel((string) config('mpesa.log_channel'))->critical('STK: push accepted without request ids, cannot be reconciled', [
                 'msisdn' => $msisdn,
                 'amount' => $amount,
                 'response' => $response,
             ]);
 
-            return;
+            return null;
         }
 
-        MpesaStkPayment::query()->updateOrCreate(
-            [
-                'merchant_request_id' => $merchantRequestId,
+        try {
+            $payment = DB::transaction(fn (): MpesaStkPayment => MpesaStkPayment::query()->updateOrCreate(
+                [
+                    'merchant_request_id' => $merchantRequestId,
+                    'checkout_request_id' => $checkoutRequestId,
+                ],
+                [
+                    'business_shortcode' => $shortcode,
+                    'msisdn' => $msisdn,
+                    'amount' => $amount,
+                ],
+            ));
+        } catch (Throwable $e) {
+            Log::channel((string) config('mpesa.log_channel'))->critical('STK: push accepted but could not be stored', [
                 'checkout_request_id' => $checkoutRequestId,
-            ],
-            [
-                'business_shortcode' => $shortcode,
+                'merchant_request_id' => $merchantRequestId,
                 'msisdn' => $msisdn,
                 'amount' => $amount,
-            ],
-        );
+                'error' => $e->getMessage(),
+            ]);
 
-        $this->log()->info('STK: push accepted by M-PESA', [
+            return null;
+        }
+
+        Log::channel((string) config('mpesa.log_channel'))->info('STK: push accepted by M-PESA', [
             'checkout_request_id' => $checkoutRequestId,
             'msisdn' => $msisdn,
             'amount' => $amount,
         ]);
+
+        return $payment;
     }
 
     /**
@@ -175,7 +203,7 @@ class MpesaStkService
      *
      * @return array{password: string, timestamp: string}
      */
-    protected function password(string $shortcode, string $passkey): array
+    public function buildPassword(string $shortcode, string $passkey): array
     {
         $timestamp = CarbonImmutable::now()->format('YmdHis');
 
@@ -183,13 +211,5 @@ class MpesaStkService
             'password' => base64_encode($shortcode.$passkey.$timestamp),
             'timestamp' => $timestamp,
         ];
-    }
-
-    /**
-     * The M-PESA log channel.
-     */
-    protected function log(): LoggerInterface
-    {
-        return Log::channel((string) config('mpesa.log_channel'));
     }
 }

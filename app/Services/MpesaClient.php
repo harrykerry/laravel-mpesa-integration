@@ -10,7 +10,6 @@ use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
-use Psr\Log\LoggerInterface;
 
 /**
  * The single way out to Safaricom Daraja.
@@ -44,26 +43,26 @@ class MpesaClient
      *
      * @throws MpesaException
      */
-    public function post(string $endpoint, array $payload): array
+    public function postToMpesa(string $endpoint, array $payload): array
     {
-        $path = $this->path($endpoint);
+        $path = $this->endpointPath($endpoint);
         $reference = (string) Str::uuid();
 
-        $this->log()->info("MPESA_REQUEST: {$endpoint}", [
+        Log::channel((string) config('mpesa.log_channel'))->info("MPESA_REQUEST: {$endpoint}", [
             'reference' => $reference,
             'path' => $path,
-            'payload' => $this->redact($payload),
+            'payload' => $this->redactSecrets($payload),
         ]);
 
-        $response = $this->send($endpoint, fn (PendingRequest $request) => $request->post($path, $payload));
+        $response = $this->sendRequest($endpoint, fn (PendingRequest $request) => $request->post($path, $payload));
 
-        $this->log()->info("MPESA_RESPONSE: {$endpoint}", [
+        Log::channel((string) config('mpesa.log_channel'))->info("MPESA_RESPONSE: {$endpoint}", [
             'reference' => $reference,
             'status' => $response->status(),
-            'body' => $this->redact((array) $response->json()),
+            'body' => $this->redactSecrets((array) $response->json()),
         ]);
 
-        return $this->body($endpoint, $response);
+        return $this->decodeResponse($endpoint, $response);
     }
 
     /**
@@ -74,18 +73,18 @@ class MpesaClient
      *
      * @throws MpesaException
      */
-    public function get(string $endpoint, array $query = []): array
+    public function getFromMpesa(string $endpoint, array $query = []): array
     {
-        $path = $this->path($endpoint);
+        $path = $this->endpointPath($endpoint);
 
-        $response = $this->send($endpoint, fn (PendingRequest $request) => $request->get($path, $query));
+        $response = $this->sendRequest($endpoint, fn (PendingRequest $request) => $request->get($path, $query));
 
-        $this->log()->info("MPESA_RESPONSE: {$endpoint}", [
+        Log::channel((string) config('mpesa.log_channel'))->info("MPESA_RESPONSE: {$endpoint}", [
             'status' => $response->status(),
-            'body' => $this->redact((array) $response->json()),
+            'body' => $this->redactSecrets((array) $response->json()),
         ]);
 
-        return $this->body($endpoint, $response);
+        return $this->decodeResponse($endpoint, $response);
     }
 
     /**
@@ -110,9 +109,9 @@ class MpesaClient
      *
      * @throws MpesaException
      */
-    public function url(string $endpoint): string
+    public function endpointUrl(string $endpoint): string
     {
-        return self::baseUrl().'/'.$this->path($endpoint);
+        return self::baseUrl().'/'.$this->endpointPath($endpoint);
     }
 
     /**
@@ -122,10 +121,10 @@ class MpesaClient
      *
      * @throws MpesaException
      */
-    protected function send(string $endpoint, callable $send): Response
+    public function sendRequest(string $endpoint, callable $send): Response
     {
         try {
-            return $send($this->request());
+            return $send($this->pendingRequest());
         } catch (ConnectionException $e) {
             throw MpesaException::requestFailed(
                 $endpoint,
@@ -143,10 +142,10 @@ class MpesaClient
      *
      * @throws MpesaException
      */
-    protected function request(): PendingRequest
+    public function pendingRequest(): PendingRequest
     {
         return Http::baseUrl(self::baseUrl())
-            ->withToken($this->auth->token())
+            ->withToken($this->auth->accessToken())
             ->timeout((int) config('mpesa.http.timeout'))
             ->connectTimeout((int) config('mpesa.http.connect_timeout'))
             ->acceptJson()
@@ -169,14 +168,14 @@ class MpesaClient
      *
      * @throws MpesaException
      */
-    protected function body(string $endpoint, Response $response): array
+    public function decodeResponse(string $endpoint, Response $response): array
     {
         $body = (array) $response->json();
 
         if ($response->failed()) {
-            $this->log()->error("MPESA_ERROR: {$endpoint}", [
+            Log::channel((string) config('mpesa.log_channel'))->error("MPESA_ERROR: {$endpoint}", [
                 'status' => $response->status(),
-                'body' => $this->redact($body) ?: $response->body(),
+                'body' => $this->redactSecrets($body) ?: $response->body(),
             ]);
 
             throw MpesaException::requestFailed(
@@ -195,7 +194,7 @@ class MpesaClient
                 $endpoint,
                 (string) ($body['ResponseDescription'] ?? $body['ResultDesc'] ?? "M-PESA returned code {$code}"),
                 (string) $code,
-                ['body' => $this->redact($body)],
+                ['body' => $this->redactSecrets($body)],
             );
         }
 
@@ -207,7 +206,7 @@ class MpesaClient
      *
      * @throws MpesaException
      */
-    protected function path(string $endpoint): string
+    public function endpointPath(string $endpoint): string
     {
         $path = config("mpesa.endpoints.{$endpoint}");
 
@@ -224,7 +223,7 @@ class MpesaClient
      * @param  array<string, mixed>  $payload
      * @return array<string, mixed>
      */
-    protected function redact(array $payload): array
+    public function redactSecrets(array $payload): array
     {
         foreach (self::REDACTED as $field) {
             if (array_key_exists($field, $payload)) {
@@ -233,13 +232,5 @@ class MpesaClient
         }
 
         return $payload;
-    }
-
-    /**
-     * The M-PESA log channel.
-     */
-    protected function log(): LoggerInterface
-    {
-        return Log::channel((string) config('mpesa.log_channel'));
     }
 }

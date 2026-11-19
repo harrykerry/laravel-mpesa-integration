@@ -25,9 +25,9 @@ class MpesaAuthService
      *
      * @throws MpesaException
      */
-    public function token(bool $forceFresh = false): string
+    public function accessToken(bool $forceFresh = false): string
     {
-        $cache = $this->cache();
+        $cache = $this->tokenCache();
         $key = (string) config('mpesa.token.key');
 
         if ($forceFresh) {
@@ -36,12 +36,12 @@ class MpesaAuthService
             return (string) $token;
         }
 
-        return $this->withoutStampede($key, function () use ($cache, $key): string {
+        return $this->withoutConcurrentFetches($key, function () use ($cache, $key): string {
             if (filled($token = $cache->get($key))) {
                 return (string) $token;
             }
 
-            ['access_token' => $token, 'expires_in' => $expiresIn] = $this->requestToken();
+            ['access_token' => $token, 'expires_in' => $expiresIn] = $this->requestNewToken();
 
             $cache->put($key, $token, now()->addSeconds($expiresIn));
 
@@ -52,9 +52,9 @@ class MpesaAuthService
     /**
      * Forget the cached token, so the next call fetches a new one.
      */
-    public function forgetToken(): void
+    public function forgetAccessToken(): void
     {
-        $this->cache()->forget((string) config('mpesa.token.key'));
+        $this->tokenCache()->forget((string) config('mpesa.token.key'));
     }
 
     /**
@@ -64,7 +64,7 @@ class MpesaAuthService
      *
      * @throws MpesaException
      */
-    protected function requestToken(): array
+    public function requestNewToken(): array
     {
         $key = config('mpesa.credentials.consumer_key');
         $secret = config('mpesa.credentials.consumer_secret');
@@ -113,14 +113,14 @@ class MpesaAuthService
 
         return [
             'access_token' => $token,
-            'expires_in' => $this->lifetime((int) $response->json('expires_in', 3600)),
+            'expires_in' => $this->cacheLifetime((int) $response->json('expires_in', 3600)),
         ];
     }
 
     /**
      * How long to keep a token, kept short of the lifetime M-PESA reported.
      */
-    protected function lifetime(int $expiresIn): int
+    public function cacheLifetime(int $expiresIn): int
     {
         return max(60, $expiresIn - (int) config('mpesa.token.leeway'));
     }
@@ -135,10 +135,10 @@ class MpesaAuthService
      * @param  callable(): TValue  $callback
      * @return TValue
      */
-    protected function withoutStampede(string $key, callable $callback): mixed
+    public function withoutConcurrentFetches(string $key, callable $callback): mixed
     {
         try {
-            return $this->cache()->lock("{$key}:lock", 15)->block(10, $callback);
+            return $this->tokenCache()->lock("{$key}:lock", 15)->block(10, $callback);
         } catch (BadMethodCallException|LockTimeoutException) {
             return $callback();
         }
@@ -147,7 +147,7 @@ class MpesaAuthService
     /**
      * The cache store tokens are kept in.
      */
-    protected function cache(): CacheRepository
+    public function tokenCache(): CacheRepository
     {
         return Cache::store(config('mpesa.token.store'));
     }

@@ -10,9 +10,13 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 /**
- * Registers this application's C2B URLs with M-PESA.
+ * Registers the URLs M-PESA calls when a customer pays the shortcode.
+ *
+ * C2B payments are not initiated here or anywhere else: the customer pays
+ * Safaricom directly. This endpoint only tells Safaricom where to send the
+ * validation and confirmation callbacks.
  */
-class C2bRegistrationController extends Controller
+class CallbackUrlController extends Controller
 {
     public function __construct(protected readonly MpesaCallbackRegistrationService $registration) {}
 
@@ -23,7 +27,7 @@ class C2bRegistrationController extends Controller
      * and the response type may be overridden, and the URLs must be HTTPS
      * because M-PESA will not call anything else.
      */
-    public function store(Request $request): JsonResponse
+    public function registerUrls(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'shortcode' => ['sometimes', 'numeric'],
@@ -41,9 +45,11 @@ class C2bRegistrationController extends Controller
             return ApiResponse::invalid($validator);
         }
 
+        $registration = $this->registration->registerUrls($validator->validated());
+
         return ApiResponse::success(
-            data: $this->registration->registerUrls($validator->validated()),
-            message: 'Callback URLs registered',
+            data: $registration,
+            message: trim('Callback URLs registered for shortcode '.$registration['shortcode'].'. '.($registration['mpesa_description'] ?? '')),
         );
     }
 }

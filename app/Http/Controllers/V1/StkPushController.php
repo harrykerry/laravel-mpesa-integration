@@ -24,7 +24,7 @@ class StkPushController extends Controller
      * passkey, transaction type, account reference and callback URL are
      * deployment configuration, and anything else sent here is ignored.
      */
-    public function store(Request $request): JsonResponse
+    public function initiatePush(Request $request): JsonResponse
     {
         $validator = Validator::make($request->all(), [
             'amount' => ['required', 'numeric', 'min:1', 'max:250000'],
@@ -44,9 +44,11 @@ class StkPushController extends Controller
 
         $data = $validator->validated();
 
+        $push = $this->stk->initiatePush($data['amount'], $data['msisdn']);
+
         return ApiResponse::success(
-            data: $this->stk->push($data['amount'], $data['msisdn']),
-            message: 'STK push sent',
+            data: $push,
+            message: 'Payment request sent to '.$data['msisdn'].'. '.$push['customer_message'],
         );
     }
 }

@@ -25,7 +25,7 @@ class PaymentController extends Controller
      * bill reference, date window and amount range, plus sorting and
      * pagination. Every filter is optional.
      */
-    public function c2b(Request $request): JsonResponse
+    public function listC2bPayments(Request $request): JsonResponse
     {
         $validator = Validator::make($request->query(), [
             'search' => ['sometimes', 'string', 'min:2', 'max:60'],
@@ -46,7 +46,7 @@ class PaymentController extends Controller
             return ApiResponse::invalid($validator, 'The filters are not valid.');
         }
 
-        $payments = $this->payments->c2bPayments($validator->validated());
+        $payments = $this->payments->listC2bPayments($validator->validated());
 
         return ApiResponse::success(
             data: $payments['data'],
@@ -62,7 +62,7 @@ class PaymentController extends Controller
      * either request id, paid or pending status, date window and amount
      * range, plus sorting and pagination. Every filter is optional.
      */
-    public function stk(Request $request): JsonResponse
+    public function listStkPayments(Request $request): JsonResponse
     {
         $validator = Validator::make($request->query(), [
             'search' => ['sometimes', 'string', 'min:2', 'max:60'],
@@ -87,7 +87,7 @@ class PaymentController extends Controller
             return ApiResponse::invalid($validator, 'The filters are not valid.');
         }
 
-        $payments = $this->payments->stkPayments($validator->validated());
+        $payments = $this->payments->listStkPayments($validator->validated());
 
         return ApiResponse::success(
             data: $payments['data'],

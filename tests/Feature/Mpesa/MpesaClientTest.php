@@ -25,7 +25,7 @@ class MpesaClientTest extends TestCase
     {
         $this->fakeMpesa('stk_push', ['ResponseCode' => '0', 'CheckoutRequestID' => 'ws_CO_1']);
 
-        $body = app(MpesaClient::class)->post('stk_push', ['Amount' => 10]);
+        $body = app(MpesaClient::class)->postToMpesa('stk_push', ['Amount' => 10]);
 
         $this->assertSame('ws_CO_1', $body['CheckoutRequestID']);
         Http::assertSent(fn ($request) => $request->url() === $this->endpointUrl('stk_push')
@@ -44,7 +44,7 @@ class MpesaClientTest extends TestCase
         $this->expectException(MpesaException::class);
         $this->expectExceptionMessage('Insufficient funds');
 
-        app(MpesaClient::class)->post('stk_push', []);
+        app(MpesaClient::class)->postToMpesa('stk_push', []);
     }
 
     #[Test]
@@ -57,7 +57,7 @@ class MpesaClientTest extends TestCase
         ], status: 400);
 
         try {
-            app(MpesaClient::class)->post('stk_push', []);
+            app(MpesaClient::class)->postToMpesa('stk_push', []);
             $this->fail('Expected a MpesaException.');
         } catch (MpesaException $e) {
             $this->assertSame('400.002.02', $e->errorCode);
@@ -78,7 +78,7 @@ class MpesaClientTest extends TestCase
                 ->push(['ResponseCode' => '0', 'CheckoutRequestID' => 'ws_CO_2']),
         ]);
 
-        $body = app(MpesaClient::class)->post('stk_push', []);
+        $body = app(MpesaClient::class)->postToMpesa('stk_push', []);
 
         $this->assertSame('ws_CO_2', $body['CheckoutRequestID']);
     }
@@ -90,7 +90,7 @@ class MpesaClientTest extends TestCase
         $this->fakeMpesa('stk_push', ['errorCode' => '400.002.02', 'errorMessage' => 'Bad Request'], status: 400);
 
         try {
-            app(MpesaClient::class)->post('stk_push', []);
+            app(MpesaClient::class)->postToMpesa('stk_push', []);
         } catch (MpesaException) {
             // expected
         }
@@ -107,7 +107,7 @@ class MpesaClientTest extends TestCase
         $this->expectException(MpesaException::class);
         $this->expectExceptionMessage('mpesa.endpoints.stk_push');
 
-        app(MpesaClient::class)->post('stk_push', []);
+        app(MpesaClient::class)->postToMpesa('stk_push', []);
     }
 
     #[Test]
@@ -122,7 +122,7 @@ class MpesaClientTest extends TestCase
         ]);
         $this->fakeMpesa('stk_push', ['ResponseCode' => '0']);
 
-        app(MpesaClient::class)->post('stk_push', ['Password' => 'super-secret', 'Amount' => 1]);
+        app(MpesaClient::class)->postToMpesa('stk_push', ['Password' => 'super-secret', 'Amount' => 1]);
 
         $written = (string) file_get_contents($path);
         @unlink($path);

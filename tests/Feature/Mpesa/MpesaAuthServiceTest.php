@@ -26,7 +26,7 @@ class MpesaAuthServiceTest extends TestCase
     {
         $this->fakeAccessToken('issued-token');
 
-        $this->assertSame('issued-token', app(MpesaAuthService::class)->token());
+        $this->assertSame('issued-token', app(MpesaAuthService::class)->accessToken());
 
         Http::assertSent(fn ($request) => str_contains($request->url(), '/oauth/v1/generate')
             && $request->hasHeader('Authorization', 'Basic '.base64_encode('test-key:test-secret')));
@@ -38,13 +38,13 @@ class MpesaAuthServiceTest extends TestCase
         $this->fakeAccessToken('issued-token');
         $service = app(MpesaAuthService::class);
 
-        $service->token();
-        $service->token();
+        $service->accessToken();
+        $service->accessToken();
 
         Http::assertSentCount(1);
 
-        $service->forgetToken();
-        $service->token();
+        $service->forgetAccessToken();
+        $service->accessToken();
 
         Http::assertSentCount(2);
     }
@@ -55,7 +55,7 @@ class MpesaAuthServiceTest extends TestCase
         $this->fakeAccessToken('issued-token', expiresIn: 3600);
         config()->set('mpesa.token.leeway', 60);
 
-        app(MpesaAuthService::class)->token();
+        app(MpesaAuthService::class)->accessToken();
 
         $this->assertSame('issued-token', Cache::get((string) config('mpesa.token.key')));
     }
@@ -68,7 +68,7 @@ class MpesaAuthServiceTest extends TestCase
         $this->expectException(MpesaException::class);
         $this->expectExceptionMessage('mpesa.credentials');
 
-        app(MpesaAuthService::class)->token();
+        app(MpesaAuthService::class)->accessToken();
     }
 
     #[Test]
@@ -79,6 +79,6 @@ class MpesaAuthServiceTest extends TestCase
         $this->expectException(MpesaException::class);
         $this->expectExceptionMessage('HTTP 401');
 
-        app(MpesaAuthService::class)->token();
+        app(MpesaAuthService::class)->accessToken();
     }
 }

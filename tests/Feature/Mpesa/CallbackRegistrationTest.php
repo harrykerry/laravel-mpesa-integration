@@ -29,7 +29,8 @@ class CallbackRegistrationTest extends TestCase
 
         $this->postJson('/api/v1/mpesa/c2b/register-urls')
             ->assertOk()
-            ->assertJsonPath('data.ResponseDescription', 'Success');
+            ->assertJsonPath('data.mpesa_description', 'Success')
+            ->assertJsonPath('data.shortcode', '600000');
 
         Http::assertSent(fn ($request) => $request->url() === $this->endpointUrl('register_url')
             && $request['ShortCode'] === '600000'

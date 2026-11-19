@@ -36,7 +36,9 @@ class StkPushTest extends TestCase
             'msisdn' => '0712345678',
         ]);
 
-        $response->assertOk()->assertJsonPath('data.CheckoutRequestID', 'ws_CO_191220191020363925');
+        $response->assertOk()
+            ->assertJsonPath('data.customer_message', 'Success. Request accepted for processing')
+            ->assertJsonMissingPath('data.ResponseCode')->assertJsonPath('data.checkout_request_id', 'ws_CO_191220191020363925');
 
         Http::assertSent(function ($request) {
             return $request->url() === $this->endpointUrl('stk_push')

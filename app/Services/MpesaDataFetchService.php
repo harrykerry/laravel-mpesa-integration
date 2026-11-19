@@ -33,7 +33,7 @@ class MpesaDataFetchService
      * @param  array<string, mixed>  $filters
      * @return array{data: list<array<string, mixed>>, meta: array<string, mixed>}
      */
-    public function c2bPayments(array $filters = []): array
+    public function listC2bPayments(array $filters = []): array
     {
         $query = MpesaConfirmation::query()
             ->when(filled($filters['search'] ?? null), fn (Builder $query) => $query->search((string) $filters['search']))
@@ -41,14 +41,14 @@ class MpesaDataFetchService
             ->when(filled($filters['msisdn'] ?? null), fn (Builder $query) => $query->forMsisdn(Msisdn::normalize((string) $filters['msisdn'])))
             ->when(filled($filters['transaction_id'] ?? null), fn (Builder $query) => $query->where('transaction_id', $filters['transaction_id']))
             ->when(filled($filters['bill_reference'] ?? null), fn (Builder $query) => $query->forBillReference((string) $filters['bill_reference']))
-            ->transactedBetween($this->date($filters['from'] ?? null), $this->date($filters['to'] ?? null))
+            ->transactedBetween($this->parseDate($filters['from'] ?? null), $this->parseDate($filters['to'] ?? null))
             ->amountBetween($filters['min_amount'] ?? null, $filters['max_amount'] ?? null);
 
-        $payments = $this->paginate($query, $filters, 'transaction_time');
+        $payments = $this->applySortAndPaginate($query, $filters, 'transaction_time');
 
         return [
             'data' => $payments->getCollection()->map($this->presentConfirmation(...))->all(),
-            'meta' => $this->meta($payments),
+            'meta' => $this->paginationMeta($payments),
         ];
     }
 
@@ -58,7 +58,7 @@ class MpesaDataFetchService
      * @param  array<string, mixed>  $filters
      * @return array{data: list<array<string, mixed>>, meta: array<string, mixed>}
      */
-    public function stkPayments(array $filters = []): array
+    public function listStkPayments(array $filters = []): array
     {
         $query = MpesaStkPayment::query()
             ->when(filled($filters['search'] ?? null), fn (Builder $query) => $query->search((string) $filters['search']))
@@ -69,14 +69,14 @@ class MpesaDataFetchService
             ->when(filled($filters['checkout_request_id'] ?? null), fn (Builder $query) => $query->where('checkout_request_id', $filters['checkout_request_id']))
             ->when(($filters['status'] ?? null) === 'paid', fn (Builder $query) => $query->paid())
             ->when(($filters['status'] ?? null) === 'pending', fn (Builder $query) => $query->awaitingCallback())
-            ->initiatedBetween($this->date($filters['from'] ?? null), $this->date($filters['to'] ?? null))
+            ->initiatedBetween($this->parseDate($filters['from'] ?? null), $this->parseDate($filters['to'] ?? null))
             ->amountBetween($filters['min_amount'] ?? null, $filters['max_amount'] ?? null);
 
-        $payments = $this->paginate($query, $filters, 'created_at');
+        $payments = $this->applySortAndPaginate($query, $filters, 'created_at');
 
         return [
             'data' => $payments->getCollection()->map($this->presentStkPayment(...))->all(),
-            'meta' => $this->meta($payments),
+            'meta' => $this->paginationMeta($payments),
         ];
     }
 
@@ -85,7 +85,7 @@ class MpesaDataFetchService
      *
      * @return array<string, mixed>
      */
-    protected function presentConfirmation(MpesaConfirmation $confirmation): array
+    public function presentConfirmation(MpesaConfirmation $confirmation): array
     {
         return [
             'id' => $confirmation->id,
@@ -110,7 +110,7 @@ class MpesaDataFetchService
      *
      * @return array<string, mixed>
      */
-    protected function presentStkPayment(MpesaStkPayment $payment): array
+    public function presentStkPayment(MpesaStkPayment $payment): array
     {
         return [
             'id' => $payment->id,
@@ -135,7 +135,7 @@ class MpesaDataFetchService
      * @param  array<string, mixed>  $filters
      * @return LengthAwarePaginator<int, TModel>
      */
-    protected function paginate(Builder $query, array $filters, string $default): LengthAwarePaginator
+    public function applySortAndPaginate(Builder $query, array $filters, string $default): LengthAwarePaginator
     {
         return $query
             ->orderBy((string) ($filters['sort'] ?? $default), (string) ($filters['direction'] ?? 'desc'))
@@ -150,7 +150,7 @@ class MpesaDataFetchService
      * @param  LengthAwarePaginator<int, Model>  $payments
      * @return array<string, mixed>
      */
-    protected function meta(LengthAwarePaginator $payments): array
+    public function paginationMeta(LengthAwarePaginator $payments): array
     {
         return [
             'current_page' => $payments->currentPage(),
@@ -167,7 +167,7 @@ class MpesaDataFetchService
     /**
      * Parse a date filter, ignoring anything blank.
      */
-    protected function date(mixed $value): ?Carbon
+    public function parseDate(mixed $value): ?Carbon
     {
         return filled($value) ? Carbon::parse($value) : null;
     }
