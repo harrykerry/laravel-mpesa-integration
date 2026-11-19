@@ -11,7 +11,7 @@ for a payment with a phone number and an amount, and nothing else.
 - **Laravel 13**, **PHP 8.5**
 - Plug it in as an API behind your own frontend, or use the services directly from Blade,
   Livewire, a job or a command in the same project
-- 89 tests covering the flows, the security rules and every endpoint
+- 90 tests covering the flows, the security rules and every endpoint
 
 ## What it covers
 
@@ -201,7 +201,7 @@ working until they move.
 | --- | --- |
 | Callbacks | Only Safaricom's published IPs (CIDR supported) and only the hosts you allowlist |
 | Your endpoints | An API key in `X-API-Key` or as a bearer token, compared in constant time |
-| Repeat requests | `Idempotency-Key` replays the first response; an identical payload with no key is caught for 60 seconds |
+| Repeat requests | `Idempotency-Key` replays the first response; an identical payload with no key is caught for 60 seconds (`MPESA_IDEMPOTENCY_AUTO_WINDOW`, `MPESA_IDEMPOTENCY_REQUIRED`) |
 | Flooding | Rate limits per sending IP, and for pushes per payer as well as per caller |
 | Outbound traffic | A host allowlist checked before any request leaves |
 | Secrets in logs | Passwords and security credentials are redacted |
@@ -240,8 +240,10 @@ public function checks(array $payload): ?C2bRejection
 ```
 
 Amount bounds, a known shortcode and a bill reference pattern are already there, driven by
-`config('mpesa.validation')`. The rejection codes are Safaricom's own, and the customer sees
-them.
+`config('mpesa.validation')`: `MPESA_VALIDATION_MIN_AMOUNT`, `MPESA_VALIDATION_MAX_AMOUNT`,
+`MPESA_VALIDATION_REQUIRE_SHORTCODE`, `MPESA_VALIDATION_REQUIRE_BILL_REF`,
+`MPESA_VALIDATION_BILL_REF_PATTERN`, and `MPESA_VALIDATION_ENABLED` to skip the lot. The
+rejection codes are Safaricom's own, and the customer sees them.
 
 Payouts, reversals and status queries are answered twice: an acknowledgement now, the real
 outcome on the result callback later. Each accepted request is stored in `mpesa_requests`,
@@ -249,8 +251,9 @@ and the result is matched back to it by conversation id. To act on an outcome, u
 `MpesaResultService::handle()`, where the matching request is already updated.
 
 Confirmed payments can be forwarded to another system over HTTP, on the queue, with retries
-and an HMAC signature in `X-Mpesa-Signature`. Set `MPESA_FORWARD_URL`, or leave it unset and
-nothing is sent.
+and an HMAC signature in `X-Mpesa-Signature`. Set `MPESA_FORWARD_URL` and
+`MPESA_FORWARD_SECRET`, or leave the URL unset and nothing is sent. The receiving host must
+be on `MPESA_ALLOWED_OUTBOUND_HOSTS`.
 
 ### Queues
 
@@ -312,11 +315,12 @@ class Checkout extends Component
 ## The landing page
 
 The default Laravel welcome page is replaced with a Livewire page that documents the project,
-reads which settings this deployment has in place, and can send a sandbox STK push. It is a
-guide, not part of the integration. To remove it:
+reads which settings this deployment has in place, and can send a sandbox STK push. It is
+styled in Safaricom's own colours, works on a phone, and is a guide rather than part of the
+integration. To remove it:
 
-1. Delete `resources/views/components/⚡welcome.blade.php`, `resources/views/layouts/app.blade.php`
-   and `tests/Feature/LandingPageTest.php`
+1. Delete `resources/views/components/⚡welcome.blade.php`, `resources/views/layouts/app.blade.php`,
+   `public/favicon.svg` and `tests/Feature/LandingPageTest.php`
 2. Replace the route in `routes/web.php` with your own
 3. Optionally `composer remove livewire/livewire`
 
@@ -335,9 +339,16 @@ app/
   Models/                                MpesaConfirmation, MpesaStkPayment, MpesaCallback, MpesaRequest
   Services/                              MpesaClient and one service per M-PESA product
   Support/                               ApiResponse, Msisdn, HostGuard
+bin/setup                                one-command install, locally or in Docker
 config/mpesa.php                         every setting, grouped and commented
 routes/api.php                           the v1 API
+Dockerfile, compose.yaml                 app, queue worker, mysql, redis, rabbitmq
+resources/views/components/⚡welcome…     the landing page, removable
 ```
+
+Database tables: `mpesa_confirmations` (C2B payments), `mpesa_stk_payments` (pushes and
+their outcome), `mpesa_callbacks` (every callback as it arrived) and `mpesa_requests`
+(payouts, reversals and queries awaiting their result callback).
 
 `MpesaClient` is the only way out to Daraja: it authenticates with a cached access token,
 applies your timeouts, retries only what is safe to repeat, logs every request and response
