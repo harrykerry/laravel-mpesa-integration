@@ -149,7 +149,7 @@ new class extends Component
         return [
             'collect' => [
                 'title' => 'Collect money',
-                'blurb' => 'An STK push prompts a customer on their handset. C2B is money they send you unprompted, which only ever arrives as a callback.',
+                'blurb' => 'An STK push asks a customer to pay. C2B is money they send on their own, which only ever reaches you as a callback.',
                 'routes' => [
                     ['method' => 'POST', 'path' => '/api/v1/mpesa/stk/push', 'note' => 'Prompt a customer to pay. Takes only msisdn and amount.'],
                     ['method' => 'POST', 'path' => '/api/v1/mpesa/stk/query', 'note' => 'Ask what became of a push.'],
@@ -167,7 +167,7 @@ BASH,
             ],
             'payouts' => [
                 'title' => 'Pay money out',
-                'blurb' => 'B2C pays a customer, B2B pays another business, and tax remittance pays the KRA. Each answers twice: an acknowledgement now, the outcome on the result callback.',
+                'blurb' => 'B2C pays a customer, B2B pays a business, tax pays the KRA. Each answers twice: accepted now, the result later on a callback.',
                 'routes' => [
                     ['method' => 'POST', 'path' => '/api/v1/mpesa/payouts/customer', 'note' => 'B2C. Business, salary or promotion payment.'],
                     ['method' => 'POST', 'path' => '/api/v1/mpesa/payouts/business', 'note' => 'B2B. Paybill, buy goods or a transfer.'],
@@ -184,7 +184,7 @@ BASH,
             ],
             'read' => [
                 'title' => 'Read what happened',
-                'blurb' => 'Every stored payment is searchable, filterable, sortable and paginated. No filter is required, and an empty result is an empty page.',
+                'blurb' => 'Saved payments, searchable and filterable. Every filter is optional, and nothing found is an empty page, not an error.',
                 'routes' => [
                     ['method' => 'GET', 'path' => '/api/v1/payments/c2b', 'note' => 'Stored C2B payments.'],
                     ['method' => 'GET', 'path' => '/api/v1/payments/stk', 'note' => 'STK pushes, paid or pending.'],
@@ -203,7 +203,7 @@ BASH,
             ],
             'callbacks' => [
                 'title' => 'What M-PESA calls',
-                'blurb' => 'These are for Safaricom, not for you. They accept only Safaricom addresses, are acknowledged at once, and are processed on the queue. Validation is the exception: M-PESA waits for it, so it answers inline.',
+                'blurb' => 'For Safaricom, not for you. Only Safaricom addresses get through, and the work happens on the queue. Validation is the exception: M-PESA waits for it.',
                 'routes' => [
                     ['method' => 'POST', 'path' => '/api/v1/callbacks/c2b/validation', 'note' => 'Accept or reject before the customer is deducted.'],
                     ['method' => 'POST', 'path' => '/api/v1/callbacks/c2b/confirmation', 'note' => 'A completed C2B payment.'],
@@ -229,116 +229,139 @@ PHP,
     }
 }; ?>
 
-<div x-data="{ section: 'overview' }" class="mx-auto max-w-6xl px-6 py-10 lg:flex lg:gap-12 lg:py-16">
+<div x-data="{ section: 'overview' }">
+
+    <header class="bg-saf-green text-white">
+        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-3.5">
+            <span class="font-semibold">M-PESA for Laravel</span>
+            <span class="text-sm text-white/90">
+                {{ config('mpesa.environment') }} &middot; Laravel {{ app()->version() }} &middot; PHP {{ PHP_VERSION }}
+            </span>
+        </div>
+    </header>
+
+    <div class="mx-auto max-w-6xl px-6 py-10 lg:flex lg:gap-12 lg:py-14">
 
     {{-- Left-hand section nav. Sticky on a wide screen, stacked above the
          content on a narrow one, and it tracks the section being read. --}}
     <aside class="lg:w-56 lg:shrink-0">
         <div class="lg:sticky lg:top-10">
-            <p class="text-xs uppercase tracking-wider text-stone-400">{{ config('app.name') }}</p>
-            <p class="mt-1 font-semibold text-stone-800">M-PESA for Laravel</p>
+            <p class="font-semibold text-saf-ink">M-PESA for Laravel</p>
 
-            <nav class="mt-6 flex flex-wrap gap-x-4 gap-y-1 border-b border-stone-300/70 pb-4 text-sm lg:flex-col lg:gap-0 lg:border-b-0 lg:border-l lg:border-stone-300/70 lg:pb-0">
+            <nav class="mt-6 flex flex-wrap gap-x-4 gap-y-1 border-b border-saf-line pb-4 text-sm lg:flex-col lg:gap-0 lg:border-b-0 lg:border-l lg:border-saf-line lg:pb-0">
                 @foreach ([
                     'overview' => 'Overview',
-                    'flow' => 'How a payment moves',
-                    'install' => 'Install',
-                    'configured' => 'Your configuration',
+                    'flow' => 'How it works',
+                    'install' => 'Run it',
+                    'configured' => 'Your settings',
                     'endpoints' => 'Endpoints',
-                    'demo' => 'Sandbox demo',
-                    'modify' => 'Changing it',
-                    'going-live' => 'Before going live',
+                    'demo' => 'Try it',
+                    'modify' => 'Change it',
+                    'going-live' => 'Going live',
                     'contact' => 'Contact',
                 ] as $anchor => $label)
                     <a href="#{{ $anchor }}"
                        @click="section = '{{ $anchor }}'"
                        :class="section === '{{ $anchor }}'
-                           ? 'text-stone-800 font-medium lg:border-mpesa-600'
-                           : 'text-stone-500 hover:text-stone-800 lg:border-transparent'"
+                           ? 'font-semibold text-saf-ink lg:border-saf-green'
+                           : 'text-saf-muted hover:text-saf-ink lg:border-transparent'"
                        class="py-1 lg:-ml-px lg:border-l-2 lg:pl-4">{{ $label }}</a>
                 @endforeach
             </nav>
 
-            <dl class="mt-6 hidden space-y-1 text-xs text-stone-500 lg:block">
-                <div class="flex justify-between gap-2"><dt>Laravel</dt><dd class="text-stone-700">{{ app()->version() }}</dd></div>
-                <div class="flex justify-between gap-2"><dt>PHP</dt><dd class="text-stone-700">{{ PHP_VERSION }}</dd></div>
-                <div class="flex justify-between gap-2"><dt>Daraja</dt><dd class="text-stone-700">{{ config('mpesa.environment') }}</dd></div>
-                <div class="flex justify-between gap-2"><dt>Queue</dt><dd class="text-stone-700">{{ config('mpesa.queue.connection') ?: config('queue.default') }}</dd></div>
+            <dl class="mt-6 hidden space-y-1 text-xs text-saf-muted lg:block">
+                <div class="flex justify-between gap-2"><dt>Laravel</dt><dd class="text-saf-body">{{ app()->version() }}</dd></div>
+                <div class="flex justify-between gap-2"><dt>PHP</dt><dd class="text-saf-body">{{ PHP_VERSION }}</dd></div>
+                <div class="flex justify-between gap-2"><dt>Daraja</dt><dd class="text-saf-body">{{ config('mpesa.environment') }}</dd></div>
+                <div class="flex justify-between gap-2"><dt>Queue</dt><dd class="text-saf-body">{{ config('mpesa.queue.connection') ?: config('queue.default') }}</dd></div>
             </dl>
         </div>
     </aside>
 
     <main class="min-w-0 flex-1">
 
-        <section id="overview" class="scroll-mt-10 border-b border-stone-300/70 pb-10">
-            <h1 class="text-3xl font-semibold tracking-tight text-stone-800 sm:text-4xl">
+        <section id="overview" class="scroll-mt-10 border-b border-saf-line pb-10">
+            <h1 class="text-3xl font-semibold tracking-tight text-saf-ink sm:text-4xl">
                 Safaricom M-PESA for Laravel
             </h1>
-            <p class="mt-4 text-stone-600">
-                A backend for the whole Daraja surface: STK push and C2B collections, B2C and B2B payouts, tax
-                remittance, reversals, transaction status, account balance and QR codes. Callbacks are written
-                down, acknowledged at once and processed on a queue, so Safaricom never waits on your database.
+            <p class="mt-4 text-saf-body">
+                A Laravel backend for M-PESA. It handles STK push, C2B, B2C, B2B, tax, reversals, status,
+                balance and QR codes.
             </p>
-            <p class="mt-4 text-stone-600">
-                A frontend asks for a payment with a phone number and an amount, and nothing else. Shortcodes,
-                passkeys, credentials and callback URLs stay in this application's environment file.
+            <p class="mt-4 text-saf-body">
+                Your frontend sends a phone number and an amount. Shortcodes, passkeys and credentials stay
+                here, in one config file.
             </p>
         </section>
         {{-- How a payment moves --}}
-        <section id="flow" class="scroll-mt-10 border-b border-stone-300/70 py-10">
-        <h2 class="text-xl font-semibold text-stone-800">How a payment moves</h2>
+        <section id="flow" class="scroll-mt-10 border-b border-saf-line py-10">
+        <h2 class="text-xl font-semibold text-saf-ink">How a payment moves</h2>
         <ol class="mt-5 space-y-5">
             @foreach ([
-                ['Money starts moving', 'Either your frontend asks for an STK push, or a customer pays your shortcode on their own. Only the push is something you initiate; C2B arrives unannounced.'],
-                ['Safaricom calls back', 'The payload is stored exactly as it arrived, acknowledged immediately, and handed to a queued job. A resend lands on the same row rather than being processed twice.'],
-                ['Your system is told', 'The job writes the payment in one transaction. If you have configured a forwarding URL, the payment is delivered there on the queue, signed and retried.'],
+                ['A payment starts', 'You ask for an STK push, or a customer pays your shortcode on their own. Only the push starts with you.'],
+                ['Safaricom calls back', 'We save the payload, answer straight away, and let a queued job do the work. A repeat of the same callback is ignored.'],
+                ['Your system hears', 'The job saves the payment. If you set a forwarding URL, it is sent on to you, signed and retried.'],
             ] as $index => [$title, $copy])
                 <li class="flex gap-4">
-                    <span class="w-5 shrink-0 pt-0.5 text-sm text-stone-400">{{ $index + 1 }}.</span>
+                    <span class="w-5 shrink-0 pt-0.5 text-sm text-saf-muted">{{ $index + 1 }}.</span>
                     <div>
-                        <h3 class="font-medium text-stone-800">{{ $title }}</h3>
-                        <p class="mt-1 text-stone-600">{{ $copy }}</p>
+                        <h3 class="font-medium text-saf-ink">{{ $title }}</h3>
+                        <p class="mt-1 text-saf-body">{{ $copy }}</p>
                     </div>
                 </li>
             @endforeach
         </ol>
-        <p class="mt-5 text-stone-600">
-            C2B validation is the one exception. M-PESA holds the payment until it answers, so it is decided
-            inline: accept and the customer is deducted, reject and their money is left alone.
+        <p class="mt-5 text-saf-body">
+            C2B validation is the exception. M-PESA waits for that one, so it answers at once: accept and the
+            customer pays, reject and they keep their money.
         </p>
     </section>
 
     {{-- Install --}}
-    <section id="install" class="scroll-mt-10 border-b border-stone-300/70 py-10">
-        <h2 class="text-xl font-semibold text-stone-800">Install</h2>
-        <pre class="mt-5 overflow-x-auto rounded-md p-4 text-[13px] leading-relaxed text-stone-100"><code>composer install
+    <section id="install" class="scroll-mt-10 border-b border-saf-line py-10">
+        <h2 class="text-xl font-semibold text-saf-ink">Run it</h2>
+        <p class="mt-2 text-saf-body">With Docker, nothing else to install:</p>
+        <pre class="mt-4 overflow-x-auto rounded-md p-4 text-[13px] leading-relaxed text-saf-bg"><code>cp .env.example .env
+docker compose up -d                        # app, queue worker, redis, mysql
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan migrate
+
+# prefer RabbitMQ? set QUEUE_CONNECTION=rabbitmq in .env, then
+docker compose --profile rabbitmq up -d</code></pre>
+        <p class="mt-3 text-saf-body">
+            The app is on <a href="http://localhost:8000" class="text-saf-green underline hover:text-saf-dark">localhost:8000</a>.
+            RabbitMQ's dashboard is on <a href="http://localhost:15672" class="text-saf-green underline hover:text-saf-dark">localhost:15672</a>, guest / guest.
+        </p>
+
+        <p class="mt-7 text-saf-body">Or run it yourself:</p>
+        <pre class="mt-4 overflow-x-auto rounded-md p-4 text-[13px] leading-relaxed text-saf-bg"><code>composer install
 cp .env.example .env
 php artisan key:generate
 php artisan migrate
 
-# fill in the Daraja values in .env, then issue a key for your frontend
+# add your Daraja values to .env, then make a key for your frontend
 php artisan mpesa:api-key --for=checkout
 
-# callbacks are processed on the queue, so run a worker
+# the callbacks need a worker
 php artisan queue:work --queue=mpesa
 
-# finally, tell Safaricom where to send C2B callbacks
+# last, tell Safaricom where to call
 curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
   -H "X-API-Key: your-key"</code></pre>
 
     </section>
 
-        <section id="configured" class="scroll-mt-10 border-b border-stone-300/70 py-10">
-        <h2 class="text-xl font-semibold text-stone-800">Your configuration</h2>
-        <p class="mt-1 text-sm text-stone-500">Read live from your environment. Values are never shown, only whether they are set.</p>
-        <ul class="mt-4 divide-y divide-stone-300/70 border-y border-stone-300/70">
+        <section id="configured" class="scroll-mt-10 border-b border-saf-line py-10">
+        <h2 class="text-xl font-semibold text-saf-ink">Your configuration</h2>
+        <p class="mt-1 text-sm text-saf-muted">Read live from your environment. Values are never shown, only whether they are set.</p>
+        <ul class="mt-4 divide-y divide-saf-line border-y border-saf-line">
             @foreach ($this->checklist() as $item)
                 <li class="flex items-baseline justify-between gap-4 py-2.5">
                     <span>
-                        <span class="text-stone-800">{{ $item['label'] }}</span>
-                        <code class="ml-2 text-xs text-stone-500">{{ $item['hint'] }}</code>
+                        <span class="text-saf-ink">{{ $item['label'] }}</span>
+                        <code class="ml-2 text-xs text-saf-muted">{{ $item['hint'] }}</code>
                     </span>
-                    <span class="shrink-0 text-sm {{ $item['ready'] ? 'text-mpesa-700' : 'text-stone-400' }}">
+                    <span class="shrink-0 text-sm {{ $item['ready'] ? 'font-medium text-saf-green' : 'text-saf-muted' }}">
                         {{ $item['ready'] ? 'set' : 'not set' }}
                     </span>
                 </li>
@@ -347,19 +370,19 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
     </section>
 
     {{-- Endpoints --}}
-    <section id="endpoints" class="scroll-mt-10 border-b border-stone-300/70 py-10">
-        <h2 class="text-xl font-semibold text-stone-800">Endpoints</h2>
-        <p class="mt-2 text-stone-600">
-            Everything is served under <code class="rounded bg-stone-300/50 px-1.5 py-0.5 text-sm">/api/v1</code>.
-            A breaking change gets a v2 group in <code class="rounded bg-stone-300/50 px-1.5 py-0.5 text-sm">routes/api.php</code>; v1 keeps working.
+    <section id="endpoints" class="scroll-mt-10 border-b border-saf-line py-10">
+        <h2 class="text-xl font-semibold text-saf-ink">Endpoints</h2>
+        <p class="mt-2 text-saf-body">
+            All under <code class="rounded bg-saf-tint px-1.5 py-0.5 text-sm">/api/v1</code>. Breaking changes go
+            in a v2 group, so v1 keeps working.
         </p>
 
         <div class="mt-6 flex flex-wrap gap-2 text-sm">
             @foreach ($this->groups() as $key => $group)
                 <button type="button" wire:click="$set('tab', '{{ $key }}')"
                     class="rounded-full border px-4 py-1.5 transition {{ $tab === $key
-                        ? 'border-mpesa-600 bg-mpesa-600 font-medium text-white'
-                        : 'border-stone-400/60 text-stone-600 hover:border-stone-500 hover:text-stone-800' }}">
+                        ? 'border-saf-green bg-saf-green font-medium text-white'
+                        : 'border-saf-line bg-white text-saf-body hover:border-saf-green hover:text-saf-ink' }}">
                     {{ $group['title'] }}
                 </button>
             @endforeach
@@ -367,47 +390,47 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
 
         @php($group = $this->groups()[$tab])
         <div wire:key="group-{{ $tab }}">
-            <p class="mt-5 text-stone-600">{{ $group['blurb'] }}</p>
+            <p class="mt-5 text-saf-body">{{ $group['blurb'] }}</p>
 
-            <ul class="mt-5 divide-y divide-stone-300/70 border-y border-stone-300/70">
+            <ul class="mt-5 divide-y divide-saf-line border-y border-saf-line">
                 @foreach ($group['routes'] as $route)
                     <li class="py-3">
                         <div class="flex flex-wrap items-baseline gap-2">
-                            <span class="w-12 shrink-0 text-xs font-medium text-stone-500">{{ $route['method'] }}</span>
-                            <code class="text-sm text-stone-800">{{ $route['path'] }}</code>
+                            <span class="w-12 shrink-0 text-xs font-medium text-saf-muted">{{ $route['method'] }}</span>
+                            <code class="text-sm text-saf-ink">{{ $route['path'] }}</code>
                         </div>
-                        <p class="mt-1 pl-14 text-sm text-stone-600">{{ $route['note'] }}</p>
+                        <p class="mt-1 pl-14 text-sm text-saf-body">{{ $route['note'] }}</p>
                     </li>
                 @endforeach
             </ul>
 
-            <pre class="mt-6 overflow-x-auto rounded-md p-4 text-[13px] leading-relaxed text-stone-100"><code>{{ $group['example'] }}</code></pre>
+            <pre class="mt-6 overflow-x-auto rounded-md p-4 text-[13px] leading-relaxed text-saf-bg"><code>{{ $group['example'] }}</code></pre>
         </div>
     </section>
 
     {{-- Demo --}}
-    <section id="demo" class="scroll-mt-10 border-b border-stone-300/70 py-10">
-        <h2 class="text-xl font-semibold text-stone-800">Sandbox demo</h2>
-        <p class="mt-2 text-stone-600">
-            This form calls <code class="rounded bg-stone-300/50 px-1.5 py-0.5 text-sm">MpesaStkService::initiatePush()</code>
-            directly, the same service the API endpoint uses. That is the point: nothing in the services needs an
-            HTTP request, so they work just as well from Blade, Livewire, a job or a command.
+    <section id="demo" class="scroll-mt-10 border-b border-saf-line py-10">
+        <h2 class="text-xl font-semibold text-saf-ink">Try it</h2>
+        <p class="mt-2 text-saf-body">
+            This form calls <code class="rounded bg-saf-tint px-1.5 py-0.5 text-sm">MpesaStkService::initiatePush()</code>,
+            the same service the API uses. The services need no HTTP request, so they work from Blade, Livewire,
+            a job or a command just as well.
         </p>
 
         @if ($this->demoAvailable())
             <form wire:submit="sendDemoPush" class="mt-6 flex flex-wrap items-end gap-4">
                 <label class="block">
-                    <span class="block text-sm text-stone-600">Amount (KES)</span>
+                    <span class="block text-sm text-saf-body">Amount (KES)</span>
                     <input type="number" wire:model="amount" min="1"
-                        class="mt-1 w-32 rounded border border-stone-400/60 bg-[#f7f5f1] px-3 py-2 outline-none focus:border-mpesa-600">
+                        class="mt-1 w-32 rounded border border-saf-line bg-white text-saf-ink px-3 py-2 outline-none focus:border-saf-green">
                 </label>
                 <label class="block">
-                    <span class="block text-sm text-stone-600">Mobile number</span>
+                    <span class="block text-sm text-saf-body">Mobile number</span>
                     <input type="text" wire:model="msisdn" placeholder="0712345678"
-                        class="mt-1 w-44 rounded border border-stone-400/60 bg-[#f7f5f1] px-3 py-2 outline-none focus:border-mpesa-600">
+                        class="mt-1 w-44 rounded border border-saf-line bg-white text-saf-ink px-3 py-2 outline-none focus:border-saf-green">
                 </label>
                 <button type="submit" wire:loading.attr="disabled"
-                    class="rounded bg-mpesa-600 px-4 py-2 font-medium text-white hover:bg-mpesa-700 disabled:opacity-60">
+                    class="rounded bg-saf-green px-4 py-2 font-medium text-white hover:bg-saf-dark disabled:opacity-60">
                     <span wire:loading.remove wire:target="sendDemoPush">Send the prompt</span>
                     <span wire:loading wire:target="sendDemoPush">Asking M-PESA…</span>
                 </button>
@@ -415,25 +438,25 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
             @error('amount') <p class="mt-2 text-sm text-red-700">{{ $message }}</p> @enderror
             @error('msisdn') <p class="mt-2 text-sm text-red-700">{{ $message }}</p> @enderror
         @else
-            <p class="mt-6 rounded bg-amber-100/50 px-4 py-3 text-sm text-stone-700">
-                The demo is off. It needs <code>MPESA_DEMO_ENABLED=true</code>, the sandbox environment and sandbox
-                credentials, so it cannot fire a real payment request by accident.
+            <p class="mt-6 rounded bg-[#f1f1f1] px-4 py-3 text-sm text-saf-body">
+                The demo is off. Turn it on with <code>MPESA_DEMO_ENABLED=true</code> and sandbox credentials. It
+                stays off by default so it cannot send a real payment request.
             </p>
         @endif
 
         @if ($demoError)
-            <p class="mt-4 border-l-2 border-red-600 bg-red-100/40 px-4 py-3 text-sm text-stone-700">{{ $demoError }}</p>
+            <p class="mt-4 rounded bg-[#fdecee] px-4 py-3 text-sm text-saf-ink">{{ $demoError }}</p>
         @endif
 
         @if ($demoResult)
-            <div class="mt-4 border-l-2 border-mpesa-600 bg-mpesa-50 px-4 py-3 text-sm text-stone-700">
-                <p class="font-medium text-stone-800">{{ $demoResult['customer_message'] }}</p>
+            <div class="mt-4 border-l-2 border-white/60 bg-white/10 px-4 py-3 text-sm text-saf-body">
+                <p class="font-medium text-saf-ink">{{ $demoResult['customer_message'] }}</p>
                 <p class="mt-1"><code>checkout_request_id</code>: {{ $demoResult['checkout_request_id'] }}</p>
                 <p><code>merchant_request_id</code>: {{ $demoResult['merchant_request_id'] }}</p>
             </div>
         @endif
 
-        <h3 class="mt-8 font-medium text-stone-800">What has come through</h3>
+        <h3 class="mt-8 font-medium text-saf-ink">What has come in</h3>
         @if ($this->activity())
             <dl class="mt-3 grid grid-cols-2 gap-x-8 gap-y-2 text-sm sm:grid-cols-3">
                 @foreach ([
@@ -444,34 +467,35 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
                     'Pushes paid' => $this->activity()['stk_paid'],
                     'Pushes waiting' => $this->activity()['stk_waiting'],
                 ] as $label => $count)
-                    <div class="flex items-baseline justify-between gap-3 border-b border-stone-300/70 py-1.5">
-                        <dt class="text-stone-600">{{ $label }}</dt>
-                        <dd class="font-medium text-stone-800">{{ $count }}</dd>
+                    <div class="flex items-baseline justify-between gap-3 border-b border-saf-line py-1.5">
+                        <dt class="text-saf-body">{{ $label }}</dt>
+                        <dd class="font-medium text-saf-ink">{{ $count }}</dd>
                     </div>
                 @endforeach
             </dl>
-            <button type="button" wire:click="$refresh" class="mt-3 text-sm text-mpesa-700 underline hover:text-mpesa-800">Refresh</button>
+            <button type="button" wire:click="$refresh" class="mt-3 text-sm text-saf-green underline hover:text-saf-dark">Refresh</button>
         @else
-            <p class="mt-2 text-stone-600">Run <code class="rounded bg-stone-300/50 px-1.5 py-0.5 text-sm">php artisan migrate</code> to create the tables.</p>
+            <p class="mt-2 text-saf-body">Run <code class="rounded bg-saf-tint px-1.5 py-0.5 text-sm">php artisan migrate</code> to create the tables.</p>
         @endif
     </section>
 
     {{-- Changing it --}}
-    <section id="modify" class="scroll-mt-10 border-b border-stone-300/70 py-10">
-        <h2 class="text-xl font-semibold text-stone-800">Changing it</h2>
+    <section id="modify" class="scroll-mt-10 border-b border-saf-line py-10">
+        <h2 class="text-xl font-semibold text-saf-ink">Change it</h2>
+        <p class="mt-2 text-saf-body">Where to go for the things you are most likely to want.</p>
         <dl class="mt-5 space-y-5">
             @foreach ([
-                ['Reject a payment before the customer is deducted', 'MpesaC2bValidationService::checks()', 'Return a C2bRejection and M-PESA stops the payment; return null and it goes through. Amount bounds, shortcode and bill reference rules are already there, driven by config.'],
-                ['Act on a payout or reversal outcome', 'MpesaResultService::handle()', 'Every asynchronous API posts its outcome here. The matching mpesa_requests row is already updated with the result code, so you get the request and its answer together.'],
-                ['Tell another system about a payment', 'config/mpesa.php, forwarding', 'Set a URL and confirmed payments are delivered on the queue, signed with an HMAC and retried. Leave it unset and nothing is sent.'],
-                ['Switch Redis for RabbitMQ', '.env, QUEUE_CONNECTION', 'Both connections ship configured. Set QUEUE_CONNECTION=rabbitmq, or MPESA_QUEUE_CONNECTION=rabbitmq to move only the M-PESA jobs.'],
-                ['Use it behind your own Blade or Livewire', 'App\Services', 'Inject MpesaStkService, MpesaPayoutService, MpesaTransactionService or MpesaQrService anywhere. No service touches a request, a session or a response.'],
-                ['Add a breaking change safely', 'routes/api.php', 'Add a v2 group beside v1 with its own controllers; existing callers stay on v1 until they move.'],
+                ['Turn a payment away', 'MpesaC2bValidationService::checks()', 'Return a rejection and the customer keeps their money. Return null and the payment goes through. Amount, shortcode and account rules are already there.'],
+                ['Use a payout or reversal result', 'MpesaResultService::handle()', 'Every slow API reports back here, with its original request already matched up and saved.'],
+                ['Send payments to another system', 'config/mpesa.php, forwarding', 'Set a URL and each confirmed payment is posted there, signed and retried. Leave it empty and nothing is sent.'],
+                ['Use RabbitMQ instead of Redis', '.env, QUEUE_CONNECTION', 'Both are configured. Set QUEUE_CONNECTION=rabbitmq, or MPESA_QUEUE_CONNECTION=rabbitmq for the M-PESA jobs only.'],
+                ['Add your own frontend', 'App\Services', 'Inject any M-PESA service into a controller, component, job or command. None of them touch a request.'],
+                ['Break the API safely', 'routes/api.php', 'Add a v2 group next to v1. Old callers stay on v1 until they move.'],
             ] as [$title, $where, $copy])
                 <div>
-                    <dt class="font-medium text-stone-800">{{ $title }}</dt>
-                    <dd class="mt-1 text-stone-600">
-                        <code class="text-sm text-mpesa-700">{{ $where }}</code>
+                    <dt class="font-medium text-saf-ink">{{ $title }}</dt>
+                    <dd class="mt-1 text-saf-body">
+                        <code class="text-sm text-saf-green">{{ $where }}</code>
                         <span class="mt-1 block">{{ $copy }}</span>
                     </dd>
                 </div>
@@ -480,49 +504,60 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
     </section>
 
     {{-- Going live --}}
-    <section id="going-live" class="scroll-mt-10 border-b border-stone-300/70 py-10">
-        <h2 class="text-xl font-semibold text-stone-800">Before you go live</h2>
-        <ul class="mt-5 space-y-2.5 text-stone-600">
-            <li>Keep API keys out of the browser. Hold them in your own backend and call this API from there.</li>
-            <li>Give every caller its own key with <code class="rounded bg-stone-300/50 px-1.5 py-0.5 text-sm">php artisan mpesa:api-key</code>, so one can be revoked on its own.</li>
-            <li>Send an <code class="rounded bg-stone-300/50 px-1.5 py-0.5 text-sm">Idempotency-Key</code> per checkout attempt, so a retry cannot prompt a customer twice.</li>
-            <li>Set <code class="rounded bg-stone-300/50 px-1.5 py-0.5 text-sm">TRUSTED_PROXIES</code> behind a load balancer, or every callback will look like it came from the proxy.</li>
-            <li>Set <code class="rounded bg-stone-300/50 px-1.5 py-0.5 text-sm">MPESA_ALLOWED_HOSTS</code> to the domain you registered with Safaricom.</li>
-            <li>Callback URLs must be HTTPS and reachable without authentication: M-PESA sends no headers of yours.</li>
+    <section id="going-live" class="scroll-mt-10 border-b border-saf-line py-10">
+        <h2 class="text-xl font-semibold text-saf-ink">Going live</h2>
+        <ul class="mt-5 space-y-2.5 text-saf-body">
+            <li>Keep API keys out of the browser. Hold them in your backend and call this API from there.</li>
+            <li>Give each caller its own key with <code class="rounded bg-saf-tint px-1.5 py-0.5 text-sm">php artisan mpesa:api-key</code>, so you can revoke one alone.</li>
+            <li>Send an <code class="rounded bg-saf-tint px-1.5 py-0.5 text-sm">Idempotency-Key</code> with each checkout, so a retry cannot prompt twice.</li>
+            <li>Behind a load balancer, set <code class="rounded bg-saf-tint px-1.5 py-0.5 text-sm">TRUSTED_PROXIES</code>, or every callback looks like the proxy.</li>
+            <li>Set <code class="rounded bg-saf-tint px-1.5 py-0.5 text-sm">MPESA_ALLOWED_HOSTS</code> to the domain you gave Safaricom.</li>
+            <li>Callback URLs must be HTTPS and open: M-PESA cannot send your headers.</li>
         </ul>
     </section>
 
     {{-- Contact --}}
     <section id="contact" class="scroll-mt-10 py-10">
-        <h2 class="text-xl font-semibold text-stone-800">Contact</h2>
-        <p class="mt-2 text-stone-600">Built and maintained by Harold Kerry. Happy to help with an integration or a Daraja go-live.</p>
+        <h2 class="text-xl font-semibold text-saf-ink">Contact</h2>
+        <p class="mt-2 text-saf-body">Built by Harold Kerry. Glad to help with an integration or a go-live.</p>
         <dl class="mt-5 grid gap-2 text-sm sm:grid-cols-2">
             <div class="flex gap-2">
-                <dt class="w-20 shrink-0 text-stone-500">Email</dt>
-                <dd><a href="mailto:haroldkerry@gmail.com" class="text-mpesa-700 underline hover:text-mpesa-800">haroldkerry@gmail.com</a></dd>
+                <dt class="w-20 shrink-0 text-saf-muted">Email</dt>
+                <dd><a href="mailto:haroldkerry@gmail.com" class="text-saf-green underline hover:text-saf-dark">haroldkerry@gmail.com</a></dd>
             </div>
             <div class="flex gap-2">
-                <dt class="w-20 shrink-0 text-stone-500">Phone</dt>
-                <dd><a href="tel:+254743417198" class="text-mpesa-700 underline hover:text-mpesa-800">+254 743 417 198</a></dd>
+                <dt class="w-20 shrink-0 text-saf-muted">Phone</dt>
+                <dd><a href="tel:+254743417198" class="text-saf-green underline hover:text-saf-dark">+254 743 417 198</a></dd>
             </div>
             <div class="flex gap-2">
-                <dt class="w-20 shrink-0 text-stone-500">Website</dt>
-                <dd><a href="https://haroldkerry.co.ke" class="text-mpesa-700 underline hover:text-mpesa-800">haroldkerry.co.ke</a></dd>
+                <dt class="w-20 shrink-0 text-saf-muted">Website</dt>
+                <dd><a href="https://haroldkerry.co.ke" class="text-saf-green underline hover:text-saf-dark">haroldkerry.co.ke</a></dd>
             </div>
             <div class="flex gap-2">
-                <dt class="w-20 shrink-0 text-stone-500">Studio</dt>
-                <dd><a href="https://volcha.co.ke" class="text-mpesa-700 underline hover:text-mpesa-800">volcha.co.ke</a></dd>
+                <dt class="w-20 shrink-0 text-saf-muted">Studio</dt>
+                <dd><a href="https://volcha.co.ke" class="text-saf-green underline hover:text-saf-dark">volcha.co.ke</a></dd>
             </div>
             <div class="flex gap-2">
-                <dt class="w-20 shrink-0 text-stone-500">GitHub</dt>
-                <dd><a href="https://github.com/harrykerry" class="text-mpesa-700 underline hover:text-mpesa-800">github.com/harrykerry</a></dd>
+                <dt class="w-20 shrink-0 text-saf-muted">GitHub</dt>
+                <dd><a href="https://github.com/harrykerry" class="text-saf-green underline hover:text-saf-dark">github.com/harrykerry</a></dd>
             </div>
         </dl>
 
-        <p class="mt-10 border-t border-stone-300/70 pt-6 text-sm text-stone-500">
-            Health check at <a href="/up" class="text-mpesa-700 underline hover:text-mpesa-800">/up</a>.
+        <p class="mt-10 border-t border-saf-line pt-6 text-sm text-saf-muted">
+            Health check at <a href="/up" class="text-saf-green underline hover:text-saf-dark">/up</a>.
             MIT licensed.
         </p>
     </section>
     </main>
+    </div>
+
+    <footer class="bg-saf-green text-white">
+        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-5 text-sm">
+            <span>{{ config('app.name') }}</span>
+            <span class="text-white/90">
+                MIT licensed &middot;
+                <a href="/up" class="underline decoration-white/50 hover:decoration-white">health check</a>
+            </span>
+        </div>
+    </footer>
 </div>
