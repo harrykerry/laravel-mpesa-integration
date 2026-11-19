@@ -42,6 +42,19 @@ And the endpoints M-PESA calls, which are for Safaricom rather than for you:
 
 ## Install
 
+One script does the whole thing, and it is safe to run again:
+
+```bash
+./bin/setup              # locally, with composer and php
+./bin/setup --docker     # or in Docker, nothing else to install
+```
+
+It installs dependencies, creates `.env` (keeping one that exists), generates the app key
+only if there is none, migrates, and prints an API key for your frontend.
+
+<details>
+<summary>Or step by step</summary>
+
 ```bash
 composer install
 cp .env.example .env
@@ -55,8 +68,27 @@ php artisan mpesa:api-key --for=checkout
 php artisan queue:work --queue=mpesa
 ```
 
+</details>
+
+### With Docker
+
+```bash
+cp .env.example .env
+docker compose up -d                        # app, queue worker, redis, mysql
+docker compose exec app php artisan key:generate
+docker compose exec app php artisan migrate
+
+docker compose --profile rabbitmq up -d     # only if you want RabbitMQ
+```
+
+The app is then on `localhost:8000`, and RabbitMQ's dashboard on `localhost:15672`
+(guest / guest). `Dockerfile` serves the app with artisan and runs a worker beside it,
+which is enough for local work; in production put PHP-FPM behind nginx and run the worker
+under a supervisor.
+
 Open the app in a browser for a guide to everything below, read from your own
-configuration. See [the landing page](#the-landing-page) if you would rather not keep it.
+configuration, in Safaricom's own colours. See [the landing page](#the-landing-page) if you
+would rather not keep it.
 
 Then tell Safaricom where to send C2B traffic, once per shortcode:
 

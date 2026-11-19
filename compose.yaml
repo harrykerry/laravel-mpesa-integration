@@ -1,13 +1,48 @@
-# Local services for development. Nothing here is needed in production, where
-# you would point at managed Redis, RabbitMQ or MySQL instead.
+# Everything needed to run this project locally in Docker.
 #
-#   docker compose up -d redis            # the default queue connection
-#   docker compose up -d rabbitmq         # only if QUEUE_CONNECTION=rabbitmq
-#   docker compose up -d mysql
+#   docker compose up -d                  # app, queue worker, redis, mysql
+#   docker compose --profile rabbitmq up -d   # add RabbitMQ
 #
-# RabbitMQ's management UI is at http://localhost:15672 (guest / guest).
+# The app is then on http://localhost:8000 and RabbitMQ's management UI on
+# http://localhost:15672 (guest / guest). In production you would point the
+# same variables at managed instances instead.
 
 services:
+    app:
+        build: .
+        ports:
+            - '${APP_PORT:-8000}:8000'
+        env_file: .env
+        environment:
+            DB_HOST: mysql
+            REDIS_HOST: redis
+            RABBITMQ_HOST: rabbitmq
+        volumes:
+            - .:/app
+            - /app/vendor
+        depends_on:
+            mysql:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+
+    # The callbacks are processed here, not in the request.
+    queue:
+        build: .
+        command: php artisan queue:work --queue=mpesa --tries=5
+        env_file: .env
+        environment:
+            DB_HOST: mysql
+            REDIS_HOST: redis
+            RABBITMQ_HOST: rabbitmq
+        volumes:
+            - .:/app
+            - /app/vendor
+        depends_on:
+            app:
+                condition: service_started
+        restart: unless-stopped
+
     redis:
         image: redis:7-alpine
         ports:
@@ -19,8 +54,10 @@ services:
             interval: 10s
             retries: 5
 
+    # Only started with: docker compose --profile rabbitmq up -d
     rabbitmq:
         image: rabbitmq:3-management-alpine
+        profiles: ['rabbitmq']
         ports:
             - '5672:5672'
             - '15672:15672'

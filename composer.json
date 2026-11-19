@@ -3,7 +3,14 @@
     "name": "harrykerry/laravel-mpesa-integration",
     "type": "project",
     "description": "Safaricom M-PESA Daraja integration for Laravel: C2B callbacks, STK push, status queries and reconciliation.",
-    "keywords": ["laravel", "mpesa", "daraja", "safaricom", "stk-push", "c2b"],
+    "keywords": [
+        "laravel",
+        "mpesa",
+        "daraja",
+        "safaricom",
+        "stk-push",
+        "c2b"
+    ],
     "license": "MIT",
     "require": {
         "php": "^8.5",
@@ -37,10 +44,7 @@
     },
     "scripts": {
         "setup": [
-            "composer install",
-            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
-            "@php artisan key:generate",
-            "@php artisan migrate --force"
+            "@php -r \"passthru('./bin/setup');\""
         ],
         "dev": [
             "Composer\\Config::disableProcessTimeout",

@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+# Sets this project up in one go, locally or in Docker.
+#
+#   ./bin/setup            install locally with composer and php
+#   ./bin/setup --docker   build and start the containers instead
+#
+# It is safe to run again: nothing already in place is overwritten.
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+green() { printf '\033[0;32m%s\033[0m\n' "$1"; }
+plain() { printf '%s\n' "$1"; }
+fail()  { printf '\033[0;31m%s\033[0m\n' "$1" >&2; exit 1; }
+
+DOCKER=0
+[[ "${1:-}" == "--docker" ]] && DOCKER=1
+
+ensure_env() {
+    if [[ -f .env ]]; then
+        plain "  .env already exists, left alone"
+    else
+        cp .env.example .env
+        green "  .env created from .env.example"
+    fi
+}
+
+# Rotating an existing key would lock you out of anything already encrypted.
+ensure_key() {
+    if grep -qE '^APP_KEY=.+' .env; then
+        plain "  APP_KEY already set, left alone"
+    else
+        "$@" php artisan key:generate --force
+    fi
+}
+
+if [[ $DOCKER -eq 1 ]]; then
+    command -v docker >/dev/null || fail "Docker is not installed."
+    docker info >/dev/null 2>&1 || fail "Docker is installed but not running."
+
+    plain ""
+    green "Setting up with Docker"
+    ensure_env
+
+    plain "  building and starting the containers..."
+    docker compose up -d --build
+
+    ensure_key docker compose exec -T app
+    docker compose exec -T app php artisan migrate --force
+    docker compose exec -T app php artisan mpesa:api-key --for=local
+
+    plain ""
+    green "Running on http://localhost:${APP_PORT:-8000}"
+    plain "  queue worker: docker compose logs -f queue"
+    plain "  RabbitMQ:     docker compose --profile rabbitmq up -d"
+else
+    command -v php >/dev/null || fail "PHP is not installed."
+    command -v composer >/dev/null || fail "Composer is not installed."
+
+    php -r 'exit(version_compare(PHP_VERSION, "8.5", ">=") ? 0 : 1);' \
+        || fail "PHP 8.5 or newer is required, found $(php -r 'echo PHP_VERSION;')."
+
+    plain ""
+    green "Setting up locally"
+    plain "  installing dependencies..."
+    composer install --no-interaction
+
+    ensure_env
+    ensure_key
+
+    # A fresh clone with the default sqlite connection needs the file.
+    if grep -q '^DB_CONNECTION=sqlite' .env && [[ ! -f database/database.sqlite ]]; then
+        touch database/database.sqlite
+        green "  database/database.sqlite created"
+    fi
+
+    plain "  running migrations..."
+    php artisan migrate --force
+
+    php artisan mpesa:api-key --for=local
+
+    plain ""
+    green "Ready"
+    plain "  serve:        php artisan serve"
+    plain "  queue worker: php artisan queue:work --queue=mpesa"
+fi
+
+plain ""
+plain "Next, put your Daraja values in .env:"
+plain "  MPESA_CONSUMER_KEY, MPESA_CONSUMER_SECRET"
+plain "  MPESA_C2B_SHORTCODE, MPESA_STK_SHORTCODE, MPESA_STK_PASSKEY"
+plain "  the MPESA_*_URL callbacks, which must be public HTTPS URLs"
+plain ""
+plain "Then open the app in a browser: the landing page checks your settings."
