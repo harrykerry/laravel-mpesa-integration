@@ -25,9 +25,23 @@ class LandingPageTest extends TestCase
     {
         $this->get('/')
             ->assertOk()
-            ->assertSee('Safaricom M-PESA for Laravel')
+            ->assertSee('for Laravel')
+            ->assertSee('Collect payments, send payouts, keep the receipts')
+            ->assertSee('./bin/setup')
             ->assertSee('/api/v1/mpesa/stk/push')
             ->assertSee('haroldkerry@gmail.com');
+    }
+
+    #[Test]
+    public function it_offers_a_section_menu_on_a_small_screen(): void
+    {
+        // The sidebar is hidden below the large breakpoint, so the header
+        // carries the same sections behind a toggle.
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('hidden lg:block lg:w-56', escape: false)
+            ->assertSee('menu = !menu', escape: false)
+            ->assertSee('x-cloak', escape: false);
     }
 
     #[Test]

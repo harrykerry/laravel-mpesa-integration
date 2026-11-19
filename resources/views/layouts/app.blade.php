@@ -46,6 +46,8 @@
         pre { background: #2a2e36; }
         ::selection { background: #43b02a; color: #fff; }
         a { text-decoration-thickness: 1px; text-underline-offset: 3px; }
+        [x-cloak] { display: none !important; }
+        section[id] { scroll-margin-top: 5rem; }
     </style>
 </head>
 <body class="bg-saf-bg font-sans text-[15px] leading-relaxed text-saf-body antialiased">

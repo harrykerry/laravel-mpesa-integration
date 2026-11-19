@@ -229,43 +229,67 @@ PHP,
     }
 }; ?>
 
-<div x-data="{ section: 'overview' }">
+@php($sections = [
+    'overview' => 'Overview',
+    'flow' => 'How it works',
+    'install' => 'Run it',
+    'configured' => 'Your settings',
+    'endpoints' => 'Endpoints',
+    'demo' => 'Try it',
+    'modify' => 'Change it',
+    'going-live' => 'Going live',
+    'contact' => 'Contact',
+])
 
-    <header class="bg-saf-green text-white">
-        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-3.5">
-            <span class="font-semibold">M-PESA for Laravel</span>
-            <span class="text-sm text-white/90">
-                {{ config('mpesa.environment') }} &middot; Laravel {{ app()->version() }} &middot; PHP {{ PHP_VERSION }}
-            </span>
+<div x-data="{ section: 'overview', menu: false }">
+
+    <header class="sticky top-0 z-30 bg-saf-green text-white">
+        <div class="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+            <a href="#overview" @click="section = 'overview'; menu = false" class="flex items-center gap-2.5">
+                <span class="rounded bg-white px-2 py-1 text-sm font-bold tracking-tight text-saf-green">M-PESA</span>
+                <span class="font-semibold">for Laravel</span>
+            </a>
+
+            <div class="flex items-center gap-3">
+                <span class="hidden text-sm text-white/90 md:inline">
+                    {{ config('mpesa.environment') }} &middot; Laravel {{ app()->version() }}
+                </span>
+
+                <button type="button" @click.stop="menu = !menu"
+                    class="flex items-center gap-2 rounded border border-white/40 px-3 py-1.5 text-sm lg:hidden"
+                    :aria-expanded="menu" aria-label="Sections">
+                    <span x-text="menu ? 'Close' : 'Sections'"></span>
+                </button>
+            </div>
         </div>
+
+        {{-- The section list on a small screen, where there is no sidebar. --}}
+        <nav x-show="menu" x-cloak @click.outside="menu = false"
+            class="border-t border-white/20 lg:hidden">
+            <div class="mx-auto max-w-6xl px-4 py-2 sm:px-6">
+                @foreach ($sections as $anchor => $label)
+                    <a href="#{{ $anchor }}" @click="section = '{{ $anchor }}'; menu = false"
+                       class="block border-b border-white/10 py-2.5 text-sm last:border-b-0"
+                       :class="section === '{{ $anchor }}' ? 'font-semibold text-white' : 'text-white/80'">{{ $label }}</a>
+                @endforeach
+            </div>
+        </nav>
     </header>
 
-    <div class="mx-auto max-w-6xl px-6 py-10 lg:flex lg:gap-12 lg:py-14">
+    <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:flex lg:gap-12 lg:py-12">
 
     {{-- Left-hand section nav. Sticky on a wide screen, stacked above the
          content on a narrow one, and it tracks the section being read. --}}
-    <aside class="lg:w-56 lg:shrink-0">
-        <div class="lg:sticky lg:top-10">
-            <p class="font-semibold text-saf-ink">M-PESA for Laravel</p>
-
-            <nav class="mt-6 flex flex-wrap gap-x-4 gap-y-1 border-b border-saf-line pb-4 text-sm lg:flex-col lg:gap-0 lg:border-b-0 lg:border-l lg:border-saf-line lg:pb-0">
-                @foreach ([
-                    'overview' => 'Overview',
-                    'flow' => 'How it works',
-                    'install' => 'Run it',
-                    'configured' => 'Your settings',
-                    'endpoints' => 'Endpoints',
-                    'demo' => 'Try it',
-                    'modify' => 'Change it',
-                    'going-live' => 'Going live',
-                    'contact' => 'Contact',
-                ] as $anchor => $label)
+    <aside class="hidden lg:block lg:w-56 lg:shrink-0">
+        <div class="lg:sticky lg:top-24">
+            <nav class="flex flex-col border-l border-saf-line text-sm">
+                @foreach ($sections as $anchor => $label)
                     <a href="#{{ $anchor }}"
                        @click="section = '{{ $anchor }}'"
                        :class="section === '{{ $anchor }}'
                            ? 'font-semibold text-saf-ink lg:border-saf-green'
                            : 'text-saf-muted hover:text-saf-ink lg:border-transparent'"
-                       class="py-1 lg:-ml-px lg:border-l-2 lg:pl-4">{{ $label }}</a>
+                       class="-ml-px border-l-2 py-1 pl-4">{{ $label }}</a>
                 @endforeach
             </nav>
 
@@ -281,12 +305,11 @@ PHP,
     <main class="min-w-0 flex-1">
 
         <section id="overview" class="scroll-mt-10 border-b border-saf-line pb-10">
-            <h1 class="text-3xl font-semibold tracking-tight text-saf-ink sm:text-4xl">
-                Safaricom M-PESA for Laravel
+            <h1 class="text-2xl font-semibold tracking-tight text-saf-ink sm:text-3xl">
+                Collect payments, send payouts, keep the receipts
             </h1>
             <p class="mt-4 text-saf-body">
-                A Laravel backend for M-PESA. It handles STK push, C2B, B2C, B2B, tax, reversals, status,
-                balance and QR codes.
+                Everything Daraja does: STK push, C2B, B2C, B2B, tax, reversals, status, balance and QR codes.
             </p>
             <p class="mt-4 text-saf-body">
                 Your frontend sends a phone number and an amount. Shortcodes, passkeys and credentials stay
@@ -320,7 +343,16 @@ PHP,
     {{-- Install --}}
     <section id="install" class="scroll-mt-10 border-b border-saf-line py-10">
         <h2 class="text-xl font-semibold text-saf-ink">Run it</h2>
-        <p class="mt-2 text-saf-body">With Docker, nothing else to install:</p>
+        <p class="mt-2 text-saf-body">One script does the whole thing, and it is safe to run again:</p>
+        <pre class="mt-4 overflow-x-auto rounded-md p-4 text-[13px] leading-relaxed text-saf-bg"><code>./bin/setup              # locally, with composer and php
+./bin/setup --docker     # or in Docker, nothing else to install</code></pre>
+        <p class="mt-3 text-saf-body">
+            It installs dependencies, writes <code class="rounded bg-saf-tint px-1.5 py-0.5 text-sm">.env</code>,
+            generates the app key, migrates and prints an API key for your frontend. Nothing already in place is
+            overwritten.
+        </p>
+
+        <p class="mt-7 text-saf-body">The same thing by hand, with Docker:</p>
         <pre class="mt-4 overflow-x-auto rounded-md p-4 text-[13px] leading-relaxed text-saf-bg"><code>cp .env.example .env
 docker compose up -d                        # app, queue worker, redis, mysql
 docker compose exec app php artisan key:generate
@@ -333,7 +365,7 @@ docker compose --profile rabbitmq up -d</code></pre>
             RabbitMQ's dashboard is on <a href="http://localhost:15672" class="text-saf-green underline hover:text-saf-dark">localhost:15672</a>, guest / guest.
         </p>
 
-        <p class="mt-7 text-saf-body">Or run it yourself:</p>
+        <p class="mt-7 text-saf-body">Or without Docker:</p>
         <pre class="mt-4 overflow-x-auto rounded-md p-4 text-[13px] leading-relaxed text-saf-bg"><code>composer install
 cp .env.example .env
 php artisan key:generate
@@ -356,7 +388,7 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
         <p class="mt-1 text-sm text-saf-muted">Read live from your environment. Values are never shown, only whether they are set.</p>
         <ul class="mt-4 divide-y divide-saf-line border-y border-saf-line">
             @foreach ($this->checklist() as $item)
-                <li class="flex items-baseline justify-between gap-4 py-2.5">
+                <li class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5">
                     <span>
                         <span class="text-saf-ink">{{ $item['label'] }}</span>
                         <code class="ml-2 text-xs text-saf-muted">{{ $item['hint'] }}</code>
@@ -397,9 +429,9 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
                     <li class="py-3">
                         <div class="flex flex-wrap items-baseline gap-2">
                             <span class="w-12 shrink-0 text-xs font-medium text-saf-muted">{{ $route['method'] }}</span>
-                            <code class="text-sm text-saf-ink">{{ $route['path'] }}</code>
+                            <code class="break-all text-sm text-saf-ink">{{ $route['path'] }}</code>
                         </div>
-                        <p class="mt-1 pl-14 text-sm text-saf-body">{{ $route['note'] }}</p>
+                        <p class="mt-1 text-sm text-saf-body sm:pl-14">{{ $route['note'] }}</p>
                     </li>
                 @endforeach
             </ul>
@@ -418,19 +450,19 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
         </p>
 
         @if ($this->demoAvailable())
-            <form wire:submit="sendDemoPush" class="mt-6 flex flex-wrap items-end gap-4">
+            <form wire:submit="sendDemoPush" class="mt-6 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-end">
                 <label class="block">
                     <span class="block text-sm text-saf-body">Amount (KES)</span>
                     <input type="number" wire:model="amount" min="1"
-                        class="mt-1 w-32 rounded border border-saf-line bg-white text-saf-ink px-3 py-2 outline-none focus:border-saf-green">
+                        class="mt-1 w-full rounded border border-saf-line bg-white px-3 py-2 text-saf-ink outline-none focus:border-saf-green sm:w-32">
                 </label>
                 <label class="block">
                     <span class="block text-sm text-saf-body">Mobile number</span>
                     <input type="text" wire:model="msisdn" placeholder="0712345678"
-                        class="mt-1 w-44 rounded border border-saf-line bg-white text-saf-ink px-3 py-2 outline-none focus:border-saf-green">
+                        class="mt-1 w-full rounded border border-saf-line bg-white px-3 py-2 text-saf-ink outline-none focus:border-saf-green sm:w-44">
                 </label>
                 <button type="submit" wire:loading.attr="disabled"
-                    class="rounded bg-saf-green px-4 py-2 font-medium text-white hover:bg-saf-dark disabled:opacity-60">
+                    class="w-full rounded bg-saf-green px-4 py-2 font-medium text-white hover:bg-saf-dark disabled:opacity-60 sm:w-auto">
                     <span wire:loading.remove wire:target="sendDemoPush">Send the prompt</span>
                     <span wire:loading wire:target="sendDemoPush">Asking M-PESA…</span>
                 </button>
@@ -451,8 +483,8 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
         @if ($demoResult)
             <div class="mt-4 border-l-2 border-white/60 bg-white/10 px-4 py-3 text-sm text-saf-body">
                 <p class="font-medium text-saf-ink">{{ $demoResult['customer_message'] }}</p>
-                <p class="mt-1"><code>checkout_request_id</code>: {{ $demoResult['checkout_request_id'] }}</p>
-                <p><code>merchant_request_id</code>: {{ $demoResult['merchant_request_id'] }}</p>
+                <p class="mt-1 break-all"><code>checkout_request_id</code>: {{ $demoResult['checkout_request_id'] }}</p>
+                <p class="break-all"><code>merchant_request_id</code>: {{ $demoResult['merchant_request_id'] }}</p>
             </div>
         @endif
 
@@ -552,7 +584,7 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
     </div>
 
     <footer class="bg-saf-green text-white">
-        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-6 py-5 text-sm">
+        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-5 text-sm sm:px-6">
             <span>{{ config('app.name') }}</span>
             <span class="text-white/90">
                 MIT licensed &middot;
