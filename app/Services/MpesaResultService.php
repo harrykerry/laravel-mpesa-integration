@@ -2,7 +2,9 @@
 
 namespace App\Services;
 
+use App\Enums\MpesaCallbackType;
 use App\Models\MpesaCallback;
+use App\Models\MpesaRequest;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 
@@ -38,14 +40,32 @@ class MpesaResultService
             'parameters' => $this->parameters($result),
         ];
 
+        $request = MpesaRequest::query()
+            ->forConversation(
+                Arr::get($result, 'ConversationID'),
+                Arr::get($result, 'OriginatorConversationID'),
+            )
+            ->first();
+
+        if ($request) {
+            $request->recordOutcome(
+                $resultCode === null ? null : (int) $resultCode,
+                Arr::get($result, 'ResultDesc'),
+                $result,
+                timedOut: $callback->type === MpesaCallbackType::Timeout,
+            );
+        } else {
+            Log::channel('mpesa')->warning('RESULT: no request on record for this conversation', $context);
+        }
+
         if ($resultCode !== null && (int) $resultCode !== 0) {
             Log::channel('mpesa')->warning('RESULT: request did not succeed', $context);
         } else {
             Log::channel('mpesa')->info('RESULT: request succeeded', $context);
         }
 
-        // Act on the outcome here. The conversation id is what the request
-        // that started this was given, so it is what to look it up by.
+        // Act on the outcome here: $request is the payout, reversal or query
+        // this result belongs to, already updated with its outcome.
 
         $callback->markProcessed();
     }

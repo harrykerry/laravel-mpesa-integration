@@ -3,8 +3,11 @@
 namespace Tests\Feature\Mpesa;
 
 use App\Enums\MpesaCallbackStatus;
+use App\Enums\MpesaRequestStatus;
+use App\Enums\MpesaRequestType;
 use App\Jobs\ProcessMpesaResult;
 use App\Models\MpesaCallback;
+use App\Models\MpesaRequest;
 use App\Models\MpesaStkPayment;
 use App\Services\MpesaResultService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -239,6 +242,62 @@ class DarajaEndpointsTest extends TestCase
 
         $this->assertSame('Working Account|KES|46713.00', $parameters['AccountBalance']);
         $this->assertSame(MpesaCallbackStatus::Processed, $callback->fresh()->status);
+    }
+
+    #[Test]
+    public function it_records_an_accepted_payout_and_matches_its_result(): void
+    {
+        $this->fakeMpesa('b2c', [
+            'ConversationID' => 'AG_match_me',
+            'OriginatorConversationID' => '16740-34861180-1',
+            'ResponseCode' => '0',
+        ]);
+
+        $this->postJson('/api/v1/mpesa/payouts/customer', ['amount' => 500, 'msisdn' => '0712345678'])->assertOk();
+
+        $request = MpesaRequest::query()->sole();
+        $this->assertSame(MpesaRequestType::B2c, $request->type);
+        $this->assertSame(MpesaRequestStatus::Accepted, $request->status);
+        $this->assertSame('254712345678', $request->reference);
+        $this->assertSame('500.00', $request->amount);
+
+        $callback = MpesaCallback::factory()->create([
+            'type' => 'result',
+            'payload' => [
+                'Result' => [
+                    'ResultCode' => 0,
+                    'ResultDesc' => 'The service request is processed successfully.',
+                    'ConversationID' => 'AG_match_me',
+                    'ResultParameters' => [
+                        'ResultParameter' => [
+                            ['Key' => 'TransactionReceipt', 'Value' => 'SGR51YQ9AB'],
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        app(MpesaResultService::class)->handle($callback);
+
+        $request->refresh();
+        $this->assertSame(MpesaRequestStatus::Succeeded, $request->status);
+        $this->assertSame(0, $request->result_code);
+        $this->assertSame('SGR51YQ9AB', $request->result['ResultParameters']['ResultParameter'][0]['Value']);
+        $this->assertNotNull($request->completed_at);
+    }
+
+    #[Test]
+    public function it_marks_a_request_mpesa_timed_out_on(): void
+    {
+        $request = MpesaRequest::factory()->create(['conversation_id' => 'AG_timeout']);
+        $callback = MpesaCallback::factory()->create([
+            'type' => 'timeout',
+            'payload' => ['Result' => ['ConversationID' => 'AG_timeout', 'ResultCode' => 1, 'ResultDesc' => 'Timed out']],
+        ]);
+
+        app(MpesaResultService::class)->handle($callback);
+
+        $this->assertSame(MpesaRequestStatus::TimedOut, $request->fresh()->status);
     }
 
     #[Test]

@@ -47,7 +47,7 @@ class MpesaDataFetchService
         $payments = $this->applySortAndPaginate($query, $filters, 'transaction_time');
 
         return [
-            'data' => $payments->getCollection()->map($this->presentConfirmation(...))->all(),
+            'data' => array_map($this->presentConfirmation(...), $payments->items()),
             'meta' => $this->paginationMeta($payments),
         ];
     }
@@ -75,7 +75,7 @@ class MpesaDataFetchService
         $payments = $this->applySortAndPaginate($query, $filters, 'created_at');
 
         return [
-            'data' => $payments->getCollection()->map($this->presentStkPayment(...))->all(),
+            'data' => array_map($this->presentStkPayment(...), $payments->items()),
             'meta' => $this->paginationMeta($payments),
         ];
     }
@@ -140,8 +140,7 @@ class MpesaDataFetchService
         return $query
             ->orderBy((string) ($filters['sort'] ?? $default), (string) ($filters['direction'] ?? 'desc'))
             ->orderByDesc('id')
-            ->paginate((int) ($filters['per_page'] ?? 25))
-            ->withQueryString();
+            ->paginate((int) ($filters['per_page'] ?? 25));
     }
 
     /**
@@ -157,10 +156,6 @@ class MpesaDataFetchService
             'per_page' => $payments->perPage(),
             'total' => $payments->total(),
             'last_page' => $payments->lastPage(),
-            'from' => $payments->firstItem(),
-            'to' => $payments->lastItem(),
-            'next_page_url' => $payments->nextPageUrl(),
-            'previous_page_url' => $payments->previousPageUrl(),
         ];
     }
 

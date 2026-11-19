@@ -27,7 +27,7 @@ class PaymentListingTest extends TestCase
                 'status',
                 'message',
                 'data' => [['id', 'transaction_id', 'amount', 'transaction_time', 'payer' => ['msisdn', 'name']]],
-                'meta' => ['current_page', 'per_page', 'total', 'last_page', 'next_page_url'],
+                'meta' => ['current_page', 'per_page', 'total', 'last_page'],
             ]);
     }
 

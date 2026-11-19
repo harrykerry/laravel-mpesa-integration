@@ -2,7 +2,11 @@
 
 namespace App\Services;
 
+use App\Enums\MpesaRequestStatus;
+use App\Enums\MpesaRequestType;
 use App\Exceptions\MpesaException;
+use App\Models\MpesaRequest;
+use Illuminate\Support\Facades\Log;
 
 /**
  * The Daraja APIs that ask M-PESA about, or undo, a transaction.
@@ -38,7 +42,12 @@ class MpesaTransactionService
             'Occasion' => $transactionId,
         ]);
 
-        return $this->accepted($response, "Status query accepted for {$transactionId}");
+        return $this->accepted(
+            MpesaRequestType::TransactionStatus,
+            $response,
+            "Status query accepted for {$transactionId}",
+            reference: $transactionId,
+        );
     }
 
     /**
@@ -61,7 +70,12 @@ class MpesaTransactionService
             'QueueTimeOutURL' => (string) config('mpesa.callbacks.timeout_url'),
         ]);
 
-        return $this->accepted($response, 'Balance query accepted');
+        return $this->accepted(
+            MpesaRequestType::AccountBalance,
+            $response,
+            'Balance query accepted',
+            reference: (string) ($shortcode ?? config('mpesa.c2b.shortcode')),
+        );
     }
 
     /**
@@ -89,25 +103,56 @@ class MpesaTransactionService
             'Occasion' => $transactionId,
         ]);
 
-        return $this->accepted($response, "Reversal accepted for {$transactionId}");
+        return $this->accepted(
+            MpesaRequestType::Reversal,
+            $response,
+            "Reversal accepted for {$transactionId}",
+            reference: $transactionId,
+            amount: $amount,
+        );
     }
 
     /**
-     * The shape every asynchronous request answers with.
+     * Write down a request M-PESA accepted, and shape the answer.
      *
      * M-PESA's acknowledgement carries only the ids to follow the request
-     * up with; the outcome arrives later on the result callback.
+     * up with. The row stored here is what the result callback is matched
+     * to when the outcome arrives.
      *
      * @param  array<string, mixed>  $response
      * @return array<string, string|null>
      */
-    public function accepted(array $response, string $message): array
-    {
+    public function accepted(
+        MpesaRequestType $type,
+        array $response,
+        string $message,
+        ?string $reference = null,
+        float|int|null $amount = null,
+    ): array {
+        $conversationId = isset($response['ConversationID']) ? (string) $response['ConversationID'] : null;
+        $originatorConversationId = isset($response['OriginatorConversationID'])
+            ? (string) $response['OriginatorConversationID']
+            : null;
+
+        MpesaRequest::query()->create([
+            'type' => $type,
+            'conversation_id' => $conversationId,
+            'originator_conversation_id' => $originatorConversationId,
+            'reference' => $reference,
+            'amount' => $amount,
+            'status' => MpesaRequestStatus::Accepted,
+            'request' => ['description' => $message],
+        ]);
+
+        Log::channel('mpesa')->info("REQUEST_ACCEPTED: {$type->label()}", [
+            'conversation_id' => $conversationId,
+            'reference' => $reference,
+            'amount' => $amount,
+        ]);
+
         return [
-            'conversation_id' => isset($response['ConversationID']) ? (string) $response['ConversationID'] : null,
-            'originator_conversation_id' => isset($response['OriginatorConversationID'])
-                ? (string) $response['OriginatorConversationID']
-                : null,
+            'conversation_id' => $conversationId,
+            'originator_conversation_id' => $originatorConversationId,
             'mpesa_description' => isset($response['ResponseDescription'])
                 ? (string) $response['ResponseDescription']
                 : $message,

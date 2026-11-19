@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\MpesaRequestType;
 use App\Exceptions\MpesaException;
 use App\Support\Msisdn;
 use Illuminate\Support\Str;
@@ -49,7 +50,13 @@ class MpesaPayoutService
             'Occassion' => $remarks,
         ]);
 
-        return $this->transactions->accepted($response, "Payment to {$msisdn} accepted");
+        return $this->transactions->accepted(
+            MpesaRequestType::B2c,
+            $response,
+            "Payment to {$msisdn} accepted",
+            reference: $msisdn,
+            amount: $amount,
+        );
     }
 
     /**
@@ -82,7 +89,13 @@ class MpesaPayoutService
             'ResultURL' => (string) config('mpesa.callbacks.result_url'),
         ]);
 
-        return $this->transactions->accepted($response, "Payment to {$receiverShortcode} accepted");
+        return $this->transactions->accepted(
+            MpesaRequestType::B2b,
+            $response,
+            "Payment to {$receiverShortcode} accepted",
+            reference: $receiverShortcode,
+            amount: $amount,
+        );
     }
 
     /**
@@ -110,6 +123,12 @@ class MpesaPayoutService
             'ResultURL' => (string) config('mpesa.callbacks.result_url'),
         ]);
 
-        return $this->transactions->accepted($response, 'Tax remittance accepted');
+        return $this->transactions->accepted(
+            MpesaRequestType::TaxRemittance,
+            $response,
+            'Tax remittance accepted',
+            reference: $paymentRegistrationNumber,
+            amount: $amount,
+        );
     }
 }
