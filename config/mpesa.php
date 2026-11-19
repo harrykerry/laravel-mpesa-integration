@@ -208,6 +208,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Landing Page Demo
+    |--------------------------------------------------------------------------
+    |
+    | The landing page can send a real sandbox STK push, so it is switched
+    | off unless this is true, the environment is the sandbox, and sandbox
+    | credentials are configured.
+    |
+    */
+
+    'demo_enabled' => (bool) env('MPESA_DEMO_ENABLED', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Security
     |--------------------------------------------------------------------------
     |
