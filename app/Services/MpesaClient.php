@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\MpesaException;
+use App\Support\HostGuard;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\RequestException;
@@ -101,7 +102,11 @@ class MpesaClient
             throw MpesaException::missingConfiguration("mpesa.base_urls.{$environment}");
         }
 
-        return rtrim((string) $baseUrl, '/');
+        $baseUrl = rtrim((string) $baseUrl, '/');
+
+        HostGuard::assertAllowed($baseUrl);
+
+        return $baseUrl;
     }
 
     /**

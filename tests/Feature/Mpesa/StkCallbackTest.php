@@ -60,7 +60,7 @@ class StkCallbackTest extends TestCase
             'checkout_request_id' => 'ws_CO_191220191020363925',
         ]);
 
-        $this->postJson('/api/v1/callbacks/stk', $this->paidPayload())
+        $this->fromMpesa()->postJson('/api/v1/callbacks/stk', $this->paidPayload())
             ->assertOk()
             ->assertExactJson(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
 
@@ -77,7 +77,7 @@ class StkCallbackTest extends TestCase
             'merchant_request_id' => '29115-34620561-1',
             'checkout_request_id' => 'ws_CO_191220191020363925',
         ]);
-        $this->postJson('/api/v1/callbacks/stk', $this->paidPayload())->assertOk();
+        $this->fromMpesa()->postJson('/api/v1/callbacks/stk', $this->paidPayload())->assertOk();
         $callback = MpesaCallback::query()->sole();
 
         app(MpesaStkService::class)->recordPushOutcome($callback);

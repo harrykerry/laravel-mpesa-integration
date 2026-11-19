@@ -109,7 +109,7 @@ class MpesaStkService
                 ->lockForUpdate()
                 ->first();
 
-            if (! $payment) {
+            if (!$payment) {
                 // The push may still be mid-write, so let the job retry.
                 throw new RuntimeException("No STK push recorded for {$checkoutRequestId}");
             }

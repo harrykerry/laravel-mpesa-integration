@@ -8,6 +8,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Psr\Log\LoggerInterface;
+use Throwable;
 
 /**
  * Writes down every callback M-PESA sends before anything is done with it.
@@ -29,16 +30,26 @@ class MpesaCallbackInbox
      */
     public function recordIncomingCallback(MpesaCallbackType $type, array $payload, ?string $ipAddress = null): MpesaCallback
     {
-        $callback = DB::transaction(fn (): MpesaCallback => MpesaCallback::query()->firstOrCreate(
-            ['fingerprint' => $this->fingerprint($type, $payload)],
-            [
-                'type' => $type,
-                'reference' => $this->reference($type, $payload),
-                'payload' => $payload,
-                'ip_address' => $ipAddress,
-                'received_at' => now(),
-            ],
-        ));
+        DB::beginTransaction();
+
+        try {
+            $callback = MpesaCallback::query()->firstOrCreate(
+                ['fingerprint' => $this->fingerprint($type, $payload)],
+                [
+                    'type' => $type,
+                    'reference' => $this->reference($type, $payload),
+                    'payload' => $payload,
+                    'ip_address' => $ipAddress,
+                    'received_at' => now(),
+                ],
+            );
+
+            DB::commit();
+        } catch (Throwable $e) {
+            DB::rollBack();
+
+            throw $e;
+        }
 
         $context = [
             'callback_id' => $callback->id,

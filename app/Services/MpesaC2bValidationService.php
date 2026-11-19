@@ -28,7 +28,7 @@ class MpesaC2bValidationService
      */
     public function decide(array $payload): ?C2bRejection
     {
-        if (! config('mpesa.validation.enabled')) {
+        if (!config('mpesa.validation.enabled')) {
             return null;
         }
 

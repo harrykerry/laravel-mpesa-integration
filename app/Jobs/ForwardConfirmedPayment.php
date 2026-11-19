@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Support\HostGuard;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Http;
@@ -21,6 +22,18 @@ class ForwardConfirmedPayment implements ShouldQueue
     use Queueable;
 
     /**
+     * How many times delivery may be attempted.
+     */
+    public int $tries = 5;
+
+    /**
+     * Seconds to wait between attempts.
+     *
+     * @var list<int>
+     */
+    public array $backoff = [10, 30, 60, 300, 900];
+
+    /**
      * @param  string  $source  Which M-PESA product the payment came from: c2b or stk.
      * @param  array<string, mixed>  $payment
      */
@@ -30,18 +43,6 @@ class ForwardConfirmedPayment implements ShouldQueue
     ) {
         $this->onConnection(config('mpesa.queue.connection'))
             ->onQueue((string) config('mpesa.queue.name'));
-
-        $this->tries = (int) config('mpesa.forwarding.tries');
-    }
-
-    /**
-     * Seconds to wait between attempts.
-     *
-     * @return list<int>
-     */
-    public function backoff(): array
-    {
-        return config('mpesa.queue.backoff');
     }
 
     /**
@@ -54,6 +55,9 @@ class ForwardConfirmedPayment implements ShouldQueue
         if (blank($url)) {
             return;
         }
+
+        // Payment data only ever leaves for a host that was allowlisted.
+        HostGuard::assertAllowed($url);
 
         $body = json_encode([
             'source' => $this->source,

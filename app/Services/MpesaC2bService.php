@@ -8,6 +8,7 @@ use App\Models\MpesaConfirmation;
 use App\Support\Msisdn;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Throwable;
 
 /**
  * Stores the C2B payments M-PESA confirms.
@@ -40,7 +41,9 @@ class MpesaC2bService
             return null;
         }
 
-        $payment = DB::transaction(function () use ($callback, $payload, $receipt): MpesaConfirmation {
+        DB::beginTransaction();
+
+        try {
             $payment = MpesaConfirmation::query()->firstOrCreate(
                 ['transaction_id' => $receipt],
                 [
@@ -61,10 +64,14 @@ class MpesaC2bService
 
             $callback->markProcessed();
 
-            return $payment;
-        });
+            DB::commit();
+        } catch (Throwable $e) {
+            DB::rollBack();
 
-        if (! $payment->wasRecentlyCreated) {
+            throw $e;
+        }
+
+        if (!$payment->wasRecentlyCreated) {
             Log::channel('mpesa')->warning('C2B_CALLBACK: payment already stored, left untouched', [
                 'callback_id' => $callback->id,
                 'transaction_id' => $receipt,

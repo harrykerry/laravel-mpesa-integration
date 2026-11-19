@@ -208,6 +208,96 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Security
+    |--------------------------------------------------------------------------
+    |
+    | Callbacks cannot carry an API key, because M-PESA sends no headers of
+    | ours, so they are recognised by where they come from: the host they
+    | were sent to and the IP they came from. Our own endpoints are the
+    | opposite, and require an API key.
+    |
+    | Set trusted_proxies when running behind a load balancer or Cloudflare,
+    | or every callback will appear to come from the proxy.
+    |
+    */
+
+    'security' => [
+        'api_keys' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('MPESA_API_KEYS', '')),
+        ))),
+
+        'trusted_proxies' => env('TRUSTED_PROXIES'),
+
+        // Hosts this application answers callbacks on. Empty allows any.
+        'allowed_hosts' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('MPESA_ALLOWED_HOSTS', '')),
+        ))),
+
+        // Safaricom's published callback IPs. Replace only if Safaricom
+        // tells you to; CIDR ranges are accepted.
+        'enforce_callback_ips' => (bool) env('MPESA_ENFORCE_CALLBACK_IPS', true),
+        'callback_ips' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('MPESA_CALLBACK_IPS', implode(',', [
+                '196.201.214.200',
+                '196.201.214.206',
+                '196.201.213.114',
+                '196.201.214.207',
+                '196.201.214.208',
+                '196.201.213.44',
+                '196.201.212.127',
+                '196.201.212.138',
+                '196.201.212.129',
+                '196.201.212.136',
+                '196.201.212.74',
+                '196.201.212.69',
+            ]))),
+        ))),
+
+        // Hosts this application is allowed to call out to. Anything else is
+        // refused before a request is made, so a tampered configuration
+        // cannot send credentials or payment data elsewhere.
+        'allowed_outbound_hosts' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('MPESA_ALLOWED_OUTBOUND_HOSTS', 'sandbox.safaricom.co.ke,api.safaricom.co.ke')),
+        ))),
+
+        // Repeat requests carrying the same Idempotency-Key replay the first
+        // response instead of pushing a second payment request.
+        'idempotency' => [
+            'header' => 'Idempotency-Key',
+            'required' => (bool) env('MPESA_IDEMPOTENCY_REQUIRED', false),
+            'ttl' => (int) env('MPESA_IDEMPOTENCY_TTL', 86400),
+
+            // Seconds an identical payload with no key is treated as the
+            // same request. Set to 0 to only honour the header.
+            'auto_window' => (int) env('MPESA_IDEMPOTENCY_AUTO_WINDOW', 60),
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Rate Limits
+    |--------------------------------------------------------------------------
+    |
+    | Requests per minute. Callbacks are limited per sending IP, pushes per
+    | payer and per caller, so one customer being retried cannot exhaust the
+    | limit for everyone.
+    |
+    */
+
+    'rate_limits' => [
+        'callbacks' => (int) env('MPESA_RATE_LIMIT_CALLBACKS', 300),
+        'push_per_payer' => (int) env('MPESA_RATE_LIMIT_PUSH_PER_PAYER', 3),
+        'push_per_caller' => (int) env('MPESA_RATE_LIMIT_PUSH_PER_CALLER', 60),
+        'operations' => (int) env('MPESA_RATE_LIMIT_OPERATIONS', 10),
+        'reads' => (int) env('MPESA_RATE_LIMIT_READS', 120),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | C2B Validation Rules
     |--------------------------------------------------------------------------
     |
@@ -244,9 +334,6 @@ return [
     'queue' => [
         'connection' => env('MPESA_QUEUE_CONNECTION'),
         'name' => env('MPESA_QUEUE', 'mpesa'),
-        'tries' => (int) env('MPESA_QUEUE_TRIES', 5),
-        'timeout' => (int) env('MPESA_QUEUE_TIMEOUT', 30),
-        'backoff' => array_map('intval', explode(',', (string) env('MPESA_QUEUE_BACKOFF', '10,30,60,300,900'))),
     ],
 
     /*
@@ -265,7 +352,6 @@ return [
         'url' => env('MPESA_FORWARD_URL'),
         'secret' => env('MPESA_FORWARD_SECRET'),
         'timeout' => (int) env('MPESA_FORWARD_TIMEOUT', 15),
-        'tries' => (int) env('MPESA_FORWARD_TRIES', 5),
     ],
 
 ];

@@ -11,6 +11,19 @@ use Illuminate\Support\Facades\Http;
 trait InteractsWithMpesa
 {
     /**
+     * One of Safaricom's published callback addresses.
+     */
+    public const MPESA_IP = '196.201.214.200';
+
+    /**
+     * Send the next request from an address M-PESA calls back from.
+     */
+    protected function fromMpesa(): static
+    {
+        return $this->withServerVariables(['REMOTE_ADDR' => self::MPESA_IP]);
+    }
+
+    /**
      * Configure the integration with sandbox values the tests can assert on.
      *
      * @param  array<string, mixed>  $overrides
@@ -35,6 +48,9 @@ trait InteractsWithMpesa
             'mpesa.callbacks.timeout_url' => 'https://example.test/api/v1/mpesa/results/timeout',
             'mpesa.http.retries' => 1,
             'mpesa.http.retry_delay' => 0,
+            'mpesa.security.callback_ips' => [self::MPESA_IP],
+            'mpesa.security.enforce_callback_ips' => true,
+            'mpesa.security.allowed_outbound_hosts' => ['sandbox.safaricom.co.ke', 'api.safaricom.co.ke'],
         ], $overrides));
 
         Cache::forget((string) config('mpesa.token.key'));

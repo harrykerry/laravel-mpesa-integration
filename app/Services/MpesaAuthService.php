@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\MpesaException;
-use BadMethodCallException;
+use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Http\Client\ConnectionException;
@@ -103,7 +103,7 @@ class MpesaAuthService
 
         $token = $response->json('access_token');
 
-        if (! is_string($token) || $token === '') {
+        if (!is_string($token) || $token === '') {
             throw MpesaException::authenticationFailed('the token endpoint returned no access token');
         }
 
@@ -137,9 +137,16 @@ class MpesaAuthService
      */
     public function withoutConcurrentFetches(string $key, callable $callback): mixed
     {
+        $store = $this->tokenCache()->getStore();
+
+        // Not every cache store supports locks; without one, just fetch.
+        if (!$store instanceof LockProvider) {
+            return $callback();
+        }
+
         try {
-            return $this->tokenCache()->lock("{$key}:lock", 15)->block(10, $callback);
-        } catch (BadMethodCallException|LockTimeoutException) {
+            return $store->lock("{$key}:lock", 15)->block(10, $callback);
+        } catch (LockTimeoutException) {
             return $callback();
         }
     }

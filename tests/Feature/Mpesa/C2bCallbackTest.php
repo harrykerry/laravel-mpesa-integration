@@ -53,7 +53,7 @@ class C2bCallbackTest extends TestCase
     {
         Queue::fake();
 
-        $this->postJson('/api/v1/callbacks/c2b/confirmation', $this->confirmationPayload())
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/confirmation', $this->confirmationPayload())
             ->assertOk()
             ->assertExactJson(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
 
@@ -74,7 +74,7 @@ class C2bCallbackTest extends TestCase
     {
         Queue::fake();
 
-        $this->postJson('/api/v1/callbacks/c2b/confirmation', $this->confirmationPayload())->assertOk();
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/confirmation', $this->confirmationPayload())->assertOk();
         $callback = MpesaCallback::query()->sole();
 
         app(MpesaC2bService::class)->storeConfirmedPayment($callback);
@@ -100,8 +100,8 @@ class C2bCallbackTest extends TestCase
         Queue::fake();
         $payload = $this->confirmationPayload();
 
-        $this->postJson('/api/v1/callbacks/c2b/confirmation', $payload)->assertOk();
-        $this->postJson('/api/v1/callbacks/c2b/confirmation', $payload)->assertOk();
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/confirmation', $payload)->assertOk();
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/confirmation', $payload)->assertOk();
 
         $this->assertSame(1, MpesaCallback::query()->count());
         Queue::assertPushed(ProcessC2bConfirmation::class, 1);

@@ -105,7 +105,7 @@ class MpesaException extends RuntimeException
         return response()->json([
             'status' => 'error',
             'error_code' => $this->errorCode,
-            'message' => $this->status === HttpStatus::HTTP_INTERNAL_SERVER_ERROR && ! config('app.debug')
+            'message' => $this->status === HttpStatus::HTTP_INTERNAL_SERVER_ERROR && !config('app.debug')
                 ? 'The M-PESA integration is not configured correctly.'
                 : $this->getMessage(),
         ], $this->status);

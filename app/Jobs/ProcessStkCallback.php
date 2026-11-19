@@ -20,23 +20,27 @@ class ProcessStkCallback implements ShouldBeUnique, ShouldQueue
 {
     use Queueable;
 
-    public function __construct(public readonly MpesaCallback $callback)
-    {
-        $this->onConnection(config('mpesa.queue.connection'))
-            ->onQueue((string) config('mpesa.queue.name'));
+    /**
+     * How many times the job may be attempted.
+     */
+    public int $tries = 5;
 
-        $this->tries = (int) config('mpesa.queue.tries');
-        $this->timeout = (int) config('mpesa.queue.timeout');
-    }
+    /**
+     * Seconds the job may run before it is killed.
+     */
+    public int $timeout = 30;
 
     /**
      * Seconds to wait between attempts.
      *
-     * @return list<int>
+     * @var list<int>
      */
-    public function backoff(): array
+    public array $backoff = [10, 30, 60, 300, 900];
+
+    public function __construct(public readonly MpesaCallback $callback)
     {
-        return config('mpesa.queue.backoff');
+        $this->onConnection(config('mpesa.queue.connection'))
+            ->onQueue((string) config('mpesa.queue.name'));
     }
 
     /**

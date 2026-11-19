@@ -39,7 +39,7 @@ class C2bValidationTest extends TestCase
     #[Test]
     public function it_accepts_a_payment_that_passes_every_check(): void
     {
-        $this->postJson('/api/v1/callbacks/c2b/validation', $this->payload())
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/validation', $this->payload())
             ->assertOk()
             ->assertExactJson(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
 
@@ -51,7 +51,7 @@ class C2bValidationTest extends TestCase
     #[Test]
     public function it_rejects_a_payment_to_a_shortcode_that_is_not_ours(): void
     {
-        $this->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['BusinessShortCode' => '999999']))
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['BusinessShortCode' => '999999']))
             ->assertOk()
             ->assertExactJson(['ResultCode' => 'C2B00015', 'ResultDesc' => 'Invalid Shortcode']);
     }
@@ -61,13 +61,13 @@ class C2bValidationTest extends TestCase
     {
         config()->set(['mpesa.validation.min_amount' => 100, 'mpesa.validation.max_amount' => 1000]);
 
-        $this->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['TransAmount' => '50']))
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['TransAmount' => '50']))
             ->assertExactJson(['ResultCode' => 'C2B00013', 'ResultDesc' => 'Invalid Amount']);
 
-        $this->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['TransAmount' => '5000']))
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['TransAmount' => '5000']))
             ->assertExactJson(['ResultCode' => 'C2B00013', 'ResultDesc' => 'Invalid Amount']);
 
-        $this->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['TransAmount' => '500']))
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['TransAmount' => '500']))
             ->assertExactJson(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
     }
 
@@ -79,13 +79,13 @@ class C2bValidationTest extends TestCase
             'mpesa.validation.bill_reference_pattern' => '/^INV-\d+$/',
         ]);
 
-        $this->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['BillRefNumber' => 'random']))
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['BillRefNumber' => 'random']))
             ->assertExactJson(['ResultCode' => 'C2B00012', 'ResultDesc' => 'Invalid Account Number']);
 
-        $this->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['BillRefNumber' => '']))
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['BillRefNumber' => '']))
             ->assertExactJson(['ResultCode' => 'C2B00012', 'ResultDesc' => 'Invalid Account Number']);
 
-        $this->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['BillRefNumber' => 'INV-42']))
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['BillRefNumber' => 'INV-42']))
             ->assertExactJson(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
     }
 
@@ -94,14 +94,14 @@ class C2bValidationTest extends TestCase
     {
         config()->set('mpesa.validation.enabled', false);
 
-        $this->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['BusinessShortCode' => '999999']))
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/validation', $this->payload(['BusinessShortCode' => '999999']))
             ->assertExactJson(['ResultCode' => 0, 'ResultDesc' => 'Accepted']);
     }
 
     #[Test]
     public function validation_never_stores_a_payment(): void
     {
-        $this->postJson('/api/v1/callbacks/c2b/validation', $this->payload())->assertOk();
+        $this->fromMpesa()->postJson('/api/v1/callbacks/c2b/validation', $this->payload())->assertOk();
 
         $this->assertDatabaseEmpty('mpesa_confirmations');
         Queue::assertNotPushed(ProcessC2bConfirmation::class);
