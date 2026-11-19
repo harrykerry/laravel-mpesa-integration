@@ -354,10 +354,12 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
             A breaking change gets a v2 group in <code class="rounded bg-stone-300/50 px-1.5 py-0.5 text-sm">routes/api.php</code>; v1 keeps working.
         </p>
 
-        <div class="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-b border-stone-300/70 pb-3 text-sm">
+        <div class="mt-6 flex flex-wrap gap-2 text-sm">
             @foreach ($this->groups() as $key => $group)
                 <button type="button" wire:click="$set('tab', '{{ $key }}')"
-                    class="{{ $tab === $key ? 'font-semibold text-stone-800 underline decoration-emerald-600 decoration-2' : 'text-stone-500 hover:text-stone-800' }}">
+                    class="rounded-full border px-4 py-1.5 transition {{ $tab === $key
+                        ? 'border-emerald-700 bg-emerald-700 font-medium text-white'
+                        : 'border-stone-400/60 text-stone-600 hover:border-stone-500 hover:text-stone-800' }}">
                     {{ $group['title'] }}
                 </button>
             @endforeach
