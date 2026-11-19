@@ -253,7 +253,7 @@ PHP,
                     <a href="#{{ $anchor }}"
                        @click="section = '{{ $anchor }}'"
                        :class="section === '{{ $anchor }}'
-                           ? 'text-stone-800 font-medium lg:border-emerald-600'
+                           ? 'text-stone-800 font-medium lg:border-mpesa-600'
                            : 'text-stone-500 hover:text-stone-800 lg:border-transparent'"
                        class="py-1 lg:-ml-px lg:border-l-2 lg:pl-4">{{ $label }}</a>
                 @endforeach
@@ -338,7 +338,7 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
                         <span class="text-stone-800">{{ $item['label'] }}</span>
                         <code class="ml-2 text-xs text-stone-500">{{ $item['hint'] }}</code>
                     </span>
-                    <span class="shrink-0 text-sm {{ $item['ready'] ? 'text-emerald-700' : 'text-stone-400' }}">
+                    <span class="shrink-0 text-sm {{ $item['ready'] ? 'text-mpesa-700' : 'text-stone-400' }}">
                         {{ $item['ready'] ? 'set' : 'not set' }}
                     </span>
                 </li>
@@ -358,7 +358,7 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
             @foreach ($this->groups() as $key => $group)
                 <button type="button" wire:click="$set('tab', '{{ $key }}')"
                     class="rounded-full border px-4 py-1.5 transition {{ $tab === $key
-                        ? 'border-emerald-700 bg-emerald-700 font-medium text-white'
+                        ? 'border-mpesa-600 bg-mpesa-600 font-medium text-white'
                         : 'border-stone-400/60 text-stone-600 hover:border-stone-500 hover:text-stone-800' }}">
                     {{ $group['title'] }}
                 </button>
@@ -399,15 +399,15 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
                 <label class="block">
                     <span class="block text-sm text-stone-600">Amount (KES)</span>
                     <input type="number" wire:model="amount" min="1"
-                        class="mt-1 w-32 rounded border border-stone-400/60 bg-[#f7f5f1] px-3 py-2 outline-none focus:border-emerald-600">
+                        class="mt-1 w-32 rounded border border-stone-400/60 bg-[#f7f5f1] px-3 py-2 outline-none focus:border-mpesa-600">
                 </label>
                 <label class="block">
                     <span class="block text-sm text-stone-600">Mobile number</span>
                     <input type="text" wire:model="msisdn" placeholder="0712345678"
-                        class="mt-1 w-44 rounded border border-stone-400/60 bg-[#f7f5f1] px-3 py-2 outline-none focus:border-emerald-600">
+                        class="mt-1 w-44 rounded border border-stone-400/60 bg-[#f7f5f1] px-3 py-2 outline-none focus:border-mpesa-600">
                 </label>
                 <button type="submit" wire:loading.attr="disabled"
-                    class="rounded bg-emerald-700 px-4 py-2 font-medium text-white hover:bg-emerald-800 disabled:opacity-60">
+                    class="rounded bg-mpesa-600 px-4 py-2 font-medium text-white hover:bg-mpesa-700 disabled:opacity-60">
                     <span wire:loading.remove wire:target="sendDemoPush">Send the prompt</span>
                     <span wire:loading wire:target="sendDemoPush">Asking M-PESA…</span>
                 </button>
@@ -426,7 +426,7 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
         @endif
 
         @if ($demoResult)
-            <div class="mt-4 border-l-2 border-emerald-600 bg-emerald-100/40 px-4 py-3 text-sm text-stone-700">
+            <div class="mt-4 border-l-2 border-mpesa-600 bg-mpesa-50 px-4 py-3 text-sm text-stone-700">
                 <p class="font-medium text-stone-800">{{ $demoResult['customer_message'] }}</p>
                 <p class="mt-1"><code>checkout_request_id</code>: {{ $demoResult['checkout_request_id'] }}</p>
                 <p><code>merchant_request_id</code>: {{ $demoResult['merchant_request_id'] }}</p>
@@ -450,7 +450,7 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
                     </div>
                 @endforeach
             </dl>
-            <button type="button" wire:click="$refresh" class="mt-3 text-sm text-emerald-700 underline hover:text-emerald-800">Refresh</button>
+            <button type="button" wire:click="$refresh" class="mt-3 text-sm text-mpesa-700 underline hover:text-mpesa-800">Refresh</button>
         @else
             <p class="mt-2 text-stone-600">Run <code class="rounded bg-stone-300/50 px-1.5 py-0.5 text-sm">php artisan migrate</code> to create the tables.</p>
         @endif
@@ -471,7 +471,7 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
                 <div>
                     <dt class="font-medium text-stone-800">{{ $title }}</dt>
                     <dd class="mt-1 text-stone-600">
-                        <code class="text-sm text-emerald-800">{{ $where }}</code>
+                        <code class="text-sm text-mpesa-700">{{ $where }}</code>
                         <span class="mt-1 block">{{ $copy }}</span>
                     </dd>
                 </div>
@@ -499,28 +499,28 @@ curl -X POST http://localhost:8000/api/v1/mpesa/c2b/register-urls \
         <dl class="mt-5 grid gap-2 text-sm sm:grid-cols-2">
             <div class="flex gap-2">
                 <dt class="w-20 shrink-0 text-stone-500">Email</dt>
-                <dd><a href="mailto:haroldkerry@gmail.com" class="text-emerald-700 underline hover:text-emerald-800">haroldkerry@gmail.com</a></dd>
+                <dd><a href="mailto:haroldkerry@gmail.com" class="text-mpesa-700 underline hover:text-mpesa-800">haroldkerry@gmail.com</a></dd>
             </div>
             <div class="flex gap-2">
                 <dt class="w-20 shrink-0 text-stone-500">Phone</dt>
-                <dd><a href="tel:+254743417198" class="text-emerald-700 underline hover:text-emerald-800">+254 743 417 198</a></dd>
+                <dd><a href="tel:+254743417198" class="text-mpesa-700 underline hover:text-mpesa-800">+254 743 417 198</a></dd>
             </div>
             <div class="flex gap-2">
                 <dt class="w-20 shrink-0 text-stone-500">Website</dt>
-                <dd><a href="https://haroldkerry.co.ke" class="text-emerald-700 underline hover:text-emerald-800">haroldkerry.co.ke</a></dd>
+                <dd><a href="https://haroldkerry.co.ke" class="text-mpesa-700 underline hover:text-mpesa-800">haroldkerry.co.ke</a></dd>
             </div>
             <div class="flex gap-2">
                 <dt class="w-20 shrink-0 text-stone-500">Studio</dt>
-                <dd><a href="https://volcha.co.ke" class="text-emerald-700 underline hover:text-emerald-800">volcha.co.ke</a></dd>
+                <dd><a href="https://volcha.co.ke" class="text-mpesa-700 underline hover:text-mpesa-800">volcha.co.ke</a></dd>
             </div>
             <div class="flex gap-2">
                 <dt class="w-20 shrink-0 text-stone-500">GitHub</dt>
-                <dd><a href="https://github.com/harrykerry" class="text-emerald-700 underline hover:text-emerald-800">github.com/harrykerry</a></dd>
+                <dd><a href="https://github.com/harrykerry" class="text-mpesa-700 underline hover:text-mpesa-800">github.com/harrykerry</a></dd>
             </div>
         </dl>
 
         <p class="mt-10 border-t border-stone-300/70 pt-6 text-sm text-stone-500">
-            Health check at <a href="/up" class="text-emerald-700 underline hover:text-emerald-800">/up</a>.
+            Health check at <a href="/up" class="text-mpesa-700 underline hover:text-mpesa-800">/up</a>.
             MIT licensed.
         </p>
     </section>

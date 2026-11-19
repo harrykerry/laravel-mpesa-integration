@@ -67,8 +67,9 @@ curl -X POST https://your-app.test/api/v1/mpesa/c2b/register-urls \
 
 ### Requirements
 
-PHP 8.5, a database, and Redis if you keep the default queue connection. RabbitMQ and the
-plain database queue are configured too, see [Queues](#queues).
+PHP 8.5, a database, and a queue broker. Redis is the default, RabbitMQ is installed and
+configured, and the plain database queue works with no extra service at all; see
+[Queues](#queues). `compose.yaml` runs all three locally.
 
 ## Configuration
 
@@ -221,19 +222,38 @@ nothing is sent.
 
 ### Queues
 
-Redis is the default. Nothing else needs Redis: cache and sessions can stay on file or
-database.
+Jobs do not choose a broker themselves. They are dispatched with
+`onConnection(config('mpesa.queue.connection'))` and `onQueue('mpesa')`, so the connection
+is whatever you configure, and the queue name is `mpesa` unless you change it:
 
 ```dotenv
-QUEUE_CONNECTION=redis       # default
-QUEUE_CONNECTION=rabbitmq    # RabbitMQ, configured and ready
+QUEUE_CONNECTION=redis       # the default
+QUEUE_CONNECTION=rabbitmq    # driver installed, connection configured
 QUEUE_CONNECTION=database    # no extra service, fine at low volume
 ```
 
-To move only the M-PESA jobs and leave the rest of the app alone, set
-`MPESA_QUEUE_CONNECTION` instead. Jobs run on the `mpesa` queue, are retried five times
+Leave `MPESA_QUEUE_CONNECTION` blank and the M-PESA jobs follow `QUEUE_CONNECTION` with the
+rest of the application. Set it to move only them, for example `MPESA_QUEUE_CONNECTION=rabbitmq`
+while everything else stays on Redis.
+
+The RabbitMQ *driver* ships installed (`vladimir-yuldashev/laravel-queue-rabbitmq`, which
+registers the `rabbitmq` connector) and the connection is in `config/queue.php`. The broker
+itself is a service you run:
+
+```bash
+docker compose up -d redis       # the default
+docker compose up -d rabbitmq    # management UI on :15672, guest / guest
+```
+
+`compose.yaml` ships Redis, RabbitMQ and MySQL for local work; in production point the same
+variables at your managed instances. Jobs run on the `mpesa` queue, are retried five times
 with growing backoff, and a job that exhausts its retries marks the callback failed and logs
 a critical line.
+
+```bash
+php artisan queue:work --queue=mpesa                        # follows QUEUE_CONNECTION
+php artisan queue:work rabbitmq --queue=mpesa               # or name the connection
+```
 
 ## Using it without the API
 

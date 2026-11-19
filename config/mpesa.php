@@ -201,7 +201,7 @@ return [
     */
 
     'token' => [
-        'store' => env('MPESA_TOKEN_CACHE_STORE'),
+        'store' => env('MPESA_TOKEN_CACHE_STORE') ?: null,
         'key' => env('MPESA_TOKEN_CACHE_KEY', 'mpesa:access_token'),
         'leeway' => (int) env('MPESA_TOKEN_LEEWAY', 60),
     ],
@@ -240,7 +240,7 @@ return [
             explode(',', (string) env('MPESA_API_KEYS', '')),
         ))),
 
-        'trusted_proxies' => env('TRUSTED_PROXIES'),
+        'trusted_proxies' => env('TRUSTED_PROXIES') ?: null,
 
         // Hosts this application answers callbacks on. Empty allows any.
         'allowed_hosts' => array_values(array_filter(array_map(
@@ -345,7 +345,8 @@ return [
     */
 
     'queue' => [
-        'connection' => env('MPESA_QUEUE_CONNECTION'),
+        // Blank means "use the application's default connection".
+        'connection' => env('MPESA_QUEUE_CONNECTION') ?: null,
         'name' => env('MPESA_QUEUE', 'mpesa'),
     ],
 
