@@ -31,7 +31,7 @@ class StkPushTest extends TestCase
             'CustomerMessage' => 'Success. Request accepted for processing',
         ]);
 
-        $response = $this->postJson('/api/mpesa/stk/initiate', [
+        $response = $this->postJson('/api/v1/mpesa/stk/push', [
             'amount' => 150,
             'msisdn' => '0712345678',
         ]);
@@ -67,7 +67,7 @@ class StkPushTest extends TestCase
             'ResponseCode' => '0',
         ]);
 
-        $this->postJson('/api/mpesa/stk/initiate', [
+        $this->postJson('/api/v1/mpesa/stk/push', [
             'amount' => 150,
             'msisdn' => '0712345678',
             'consumer_key' => 'attacker-key',
@@ -83,16 +83,18 @@ class StkPushTest extends TestCase
     #[Test]
     public function it_rejects_a_mobile_number_that_is_not_a_kenyan_msisdn(): void
     {
-        $this->postJson('/api/mpesa/stk/initiate', ['amount' => 10, 'msisdn' => '12345'])
+        $this->postJson('/api/v1/mpesa/stk/push', ['amount' => 10, 'msisdn' => '12345'])
             ->assertStatus(422)
+            ->assertJsonPath('status', 'error')
             ->assertJsonValidationErrors(['msisdn']);
     }
 
     #[Test]
     public function it_rejects_a_request_without_an_amount_or_a_payer(): void
     {
-        $this->postJson('/api/mpesa/stk/initiate', [])
+        $this->postJson('/api/v1/mpesa/stk/push', [])
             ->assertStatus(422)
+            ->assertJsonPath('status', 'error')
             ->assertJsonValidationErrors(['amount', 'msisdn']);
     }
 
@@ -105,7 +107,7 @@ class StkPushTest extends TestCase
             'errorMessage' => 'Bad Request - Invalid Amount',
         ], status: 400);
 
-        $this->postJson('/api/mpesa/stk/initiate', ['amount' => 1, 'msisdn' => '254712345678'])
+        $this->postJson('/api/v1/mpesa/stk/push', ['amount' => 1, 'msisdn' => '254712345678'])
             ->assertStatus(502)
             ->assertJsonPath('error_code', '400.002.02');
 
@@ -117,19 +119,9 @@ class StkPushTest extends TestCase
     {
         $this->fakeMpesa('stk_push', ['ResponseCode' => '0', 'ResponseDescription' => 'Success']);
 
-        $this->postJson('/api/mpesa/stk/initiate', ['amount' => 10, 'msisdn' => '254712345678'])
+        $this->postJson('/api/v1/mpesa/stk/push', ['amount' => 10, 'msisdn' => '254712345678'])
             ->assertOk();
 
         $this->assertSame(0, MpesaStkPayment::query()->count());
-    }
-
-    #[Test]
-    public function it_fails_clearly_when_the_passkey_is_not_configured(): void
-    {
-        config()->set('mpesa.stk.passkey', null);
-
-        $this->postJson('/api/mpesa/stk/initiate', ['amount' => 10, 'msisdn' => '254712345678'])
-            ->assertStatus(500)
-            ->assertJsonPath('error_code', 'configuration.missing');
     }
 }

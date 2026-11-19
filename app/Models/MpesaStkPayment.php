@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\CarbonImmutable;
 use Database\Factories\MpesaStkPaymentFactory;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
@@ -50,7 +51,7 @@ class MpesaStkPayment extends Model
                 ? CarbonImmutable::createFromFormat('YmdHis', $value)
                 : null,
             set: fn (CarbonImmutable|\DateTimeInterface|string|int|null $value) => match (true) {
-                $value instanceof \DateTimeInterface => $value->format('YmdHis'),
+                $value instanceof DateTimeInterface => $value->format('YmdHis'),
                 default => $value === null ? null : (string) $value,
             },
         )->shouldCache();
@@ -118,6 +119,48 @@ class MpesaStkPayment extends Model
     {
         $query->where('merchant_request_id', $merchantRequestId)
             ->where('checkout_request_id', $checkoutRequestId);
+    }
+
+    /**
+     * Scope the query to a free-text match across the identifying columns.
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function search(Builder $query, string $term): void
+    {
+        $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], trim($term)).'%';
+
+        $query->where(function (Builder $query) use ($like): void {
+            $query->where('transaction_id', 'like', $like)
+                ->orWhere('merchant_request_id', 'like', $like)
+                ->orWhere('checkout_request_id', 'like', $like)
+                ->orWhere('msisdn', 'like', $like);
+        });
+    }
+
+    /**
+     * Scope the query to pushes initiated in a window.
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function initiatedBetween(Builder $query, ?DateTimeInterface $from = null, ?DateTimeInterface $to = null): void
+    {
+        $query->when($from, fn (Builder $query) => $query->where('created_at', '>=', $from))
+            ->when($to, fn (Builder $query) => $query->where('created_at', '<=', $to));
+    }
+
+    /**
+     * Scope the query to an amount range.
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function amountBetween(Builder $query, float|int|null $min = null, float|int|null $max = null): void
+    {
+        $query->when($min !== null, fn (Builder $query) => $query->where('amount', '>=', $min))
+            ->when($max !== null, fn (Builder $query) => $query->where('amount', '<=', $max));
     }
 
     /**

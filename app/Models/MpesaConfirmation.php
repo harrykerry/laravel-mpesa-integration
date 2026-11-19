@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Carbon\CarbonImmutable;
 use Database\Factories\MpesaConfirmationFactory;
+use DateTimeInterface;
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
@@ -59,7 +60,7 @@ class MpesaConfirmation extends Model
                 ? CarbonImmutable::createFromFormat('YmdHis', $value)
                 : null,
             set: fn (CarbonImmutable|\DateTimeInterface|string|null $value) => match (true) {
-                $value instanceof \DateTimeInterface => $value->format('YmdHis'),
+                $value instanceof DateTimeInterface => $value->format('YmdHis'),
                 default => $value,
             },
         )->shouldCache();
@@ -98,6 +99,65 @@ class MpesaConfirmation extends Model
     protected function forMsisdn(Builder $query, string $msisdn): void
     {
         $query->where('mobile_number', $msisdn);
+    }
+
+    /**
+     * Scope the query to a bill reference (the account the payer typed).
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function forBillReference(Builder $query, string $reference): void
+    {
+        $query->where('billref_no', $reference);
+    }
+
+    /**
+     * Scope the query to a free-text match across the identifying columns.
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function search(Builder $query, string $term): void
+    {
+        $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], trim($term)).'%';
+
+        $query->where(function (Builder $query) use ($like): void {
+            $query->where('transaction_id', 'like', $like)
+                ->orWhere('billref_no', 'like', $like)
+                ->orWhere('invoice_no', 'like', $like)
+                ->orWhere('thirdparty_transid', 'like', $like)
+                ->orWhere('mobile_number', 'like', $like)
+                ->orWhere('first_name', 'like', $like)
+                ->orWhere('middle_name', 'like', $like)
+                ->orWhere('last_name', 'like', $like);
+        });
+    }
+
+    /**
+     * Scope the query to transactions M-PESA timestamped in a window.
+     *
+     * The column holds M-PESA's "YmdHis" strings, which sort chronologically.
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function transactedBetween(Builder $query, ?DateTimeInterface $from = null, ?DateTimeInterface $to = null): void
+    {
+        $query->when($from, fn (Builder $query) => $query->where('transaction_time', '>=', $from->format('YmdHis')))
+            ->when($to, fn (Builder $query) => $query->where('transaction_time', '<=', $to->format('YmdHis')));
+    }
+
+    /**
+     * Scope the query to an amount range.
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function amountBetween(Builder $query, float|int|null $min = null, float|int|null $max = null): void
+    {
+        $query->when($min !== null, fn (Builder $query) => $query->where('transaction_amount', '>=', $min))
+            ->when($max !== null, fn (Builder $query) => $query->where('transaction_amount', '<=', $max));
     }
 
     /**

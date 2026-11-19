@@ -27,7 +27,7 @@ class CallbackRegistrationTest extends TestCase
             'ResponseDescription' => 'Success',
         ]);
 
-        $this->postJson('/api/mpesa/callback/register')
+        $this->postJson('/api/v1/mpesa/c2b/register-urls')
             ->assertOk()
             ->assertJsonPath('data.ResponseDescription', 'Success');
 
@@ -43,7 +43,7 @@ class CallbackRegistrationTest extends TestCase
     {
         $this->fakeMpesa('register_url', ['ResponseCode' => '0', 'ResponseDescription' => 'Success']);
 
-        $this->postJson('/api/mpesa/callback/register', [
+        $this->postJson('/api/v1/mpesa/c2b/register-urls', [
             'shortcode' => '600111',
             'confirmation_url' => 'https://example.test/other/confirmation',
             'validation_url' => 'https://example.test/other/validation',
@@ -59,20 +59,10 @@ class CallbackRegistrationTest extends TestCase
     #[Test]
     public function it_refuses_a_plain_http_callback_url(): void
     {
-        $this->postJson('/api/mpesa/callback/register', [
+        $this->postJson('/api/v1/mpesa/c2b/register-urls', [
             'confirmation_url' => 'http://example.test/insecure',
         ])->assertStatus(422)
+            ->assertJsonPath('status', 'error')
             ->assertJsonValidationErrors(['confirmation_url']);
-    }
-
-    #[Test]
-    public function it_fails_clearly_when_no_callback_urls_are_configured(): void
-    {
-        config()->set(['mpesa.callbacks.confirmation_url' => null]);
-        $this->fakeAccessToken();
-
-        $this->postJson('/api/mpesa/callback/register')
-            ->assertStatus(500)
-            ->assertJsonPath('error_code', 'configuration.missing');
     }
 }

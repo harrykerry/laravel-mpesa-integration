@@ -4,7 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\MpesaException;
 use App\Models\MpesaStkPayment;
-use App\Traits\MobileFormattingTrait;
+use App\Support\Msisdn;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Log;
 use Psr\Log\LoggerInterface;
@@ -18,27 +18,26 @@ use Psr\Log\LoggerInterface;
  */
 class MpesaStkService
 {
-    use MobileFormattingTrait;
-
     public function __construct(protected readonly MpesaClient $client) {}
 
     /**
      * Push a payment request to a customer's handset.
      *
-     * @param  array{amount: int|float|string, msisdn: string, account_reference?: string|null, transaction_desc?: string|null, transaction_type?: string|null, shortcode?: int|string|null, party_b?: int|string|null}  $data
+     * The caller supplies only the payer and the amount. The shortcode,
+     * passkey, party B, transaction type, account reference and callback URL
+     * are read from configuration.
+     *
      * @return array<string, mixed>
      *
      * @throws MpesaException
      */
-    public function push(array $data): array
+    public function push(float|int|string $amount, string $msisdn): array
     {
-        $shortcode = $this->required($data['shortcode'] ?? config('mpesa.stk.shortcode'), 'mpesa.stk.shortcode');
-        $passkey = $this->required(config('mpesa.stk.passkey'), 'mpesa.stk.passkey');
-        $callbackUrl = $this->required(config('mpesa.callbacks.stk_url'), 'mpesa.callbacks.stk_url');
+        $shortcode = (string) config('mpesa.stk.shortcode');
+        $passkey = (string) config('mpesa.stk.passkey');
 
-        $msisdn = $this->sanitizeAndFormatMobile((string) $data['msisdn']);
-        $amount = (int) round((float) $data['amount']);
-        $reference = (string) ($data['account_reference'] ?? config('mpesa.stk.account_reference'));
+        $msisdn = Msisdn::normalize($msisdn);
+        $amount = (int) round((float) $amount);
 
         ['password' => $password, 'timestamp' => $timestamp] = $this->password($shortcode, $passkey);
 
@@ -46,14 +45,14 @@ class MpesaStkService
             'BusinessShortCode' => $shortcode,
             'Password' => $password,
             'Timestamp' => $timestamp,
-            'TransactionType' => (string) ($data['transaction_type'] ?? config('mpesa.stk.transaction_type')),
+            'TransactionType' => (string) config('mpesa.stk.transaction_type'),
             'Amount' => $amount,
             'PartyA' => $msisdn,
-            'PartyB' => (string) ($data['party_b'] ?? config('mpesa.stk.party_b') ?? $shortcode),
+            'PartyB' => (string) (config('mpesa.stk.party_b') ?: $shortcode),
             'PhoneNumber' => $msisdn,
-            'CallBackURL' => $callbackUrl,
-            'AccountReference' => $reference,
-            'TransactionDesc' => (string) ($data['transaction_desc'] ?? "Payment of {$amount} to {$shortcode}"),
+            'CallBackURL' => (string) config('mpesa.callbacks.stk_url'),
+            'AccountReference' => (string) config('mpesa.stk.account_reference'),
+            'TransactionDesc' => (string) config('mpesa.stk.account_reference'),
         ]);
 
         $this->recordPush($response, $shortcode, $msisdn, $amount);
@@ -105,7 +104,7 @@ class MpesaStkService
             'transaction_date' => $metadata['TransactionDate'] ?? null,
             'amount' => $metadata['Amount'] ?? $payment->amount,
             'msisdn' => isset($metadata['PhoneNumber'])
-                ? $this->sanitizeAndFormatMobile((string) $metadata['PhoneNumber'])
+                ? Msisdn::normalize((string) $metadata['PhoneNumber'])
                 : $payment->msisdn,
         ])->save();
 
@@ -184,20 +183,6 @@ class MpesaStkService
             'password' => base64_encode($shortcode.$passkey.$timestamp),
             'timestamp' => $timestamp,
         ];
-    }
-
-    /**
-     * Fail loudly when a value M-PESA needs has not been configured.
-     *
-     * @throws MpesaException
-     */
-    protected function required(mixed $value, string $key): string
-    {
-        if (blank($value)) {
-            throw MpesaException::missingConfiguration($key);
-        }
-
-        return (string) $value;
     }
 
     /**

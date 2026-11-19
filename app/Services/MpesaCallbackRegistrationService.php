@@ -25,30 +25,10 @@ class MpesaCallbackRegistrationService
     public function registerUrls(array $overrides = []): array
     {
         return $this->client->post('register_url', [
-            'ShortCode' => $this->required($overrides['shortcode'] ?? config('mpesa.c2b.shortcode'), 'mpesa.c2b.shortcode'),
-            'ResponseType' => $overrides['response_type'] ?? config('mpesa.c2b.response_type'),
-            'ConfirmationURL' => $this->required(
-                $overrides['confirmation_url'] ?? config('mpesa.callbacks.confirmation_url'),
-                'mpesa.callbacks.confirmation_url',
-            ),
-            'ValidationURL' => $this->required(
-                $overrides['validation_url'] ?? config('mpesa.callbacks.validation_url'),
-                'mpesa.callbacks.validation_url',
-            ),
+            'ShortCode' => (string) ($overrides['shortcode'] ?? config('mpesa.c2b.shortcode')),
+            'ResponseType' => (string) ($overrides['response_type'] ?? config('mpesa.c2b.response_type')),
+            'ConfirmationURL' => (string) ($overrides['confirmation_url'] ?? config('mpesa.callbacks.confirmation_url')),
+            'ValidationURL' => (string) ($overrides['validation_url'] ?? config('mpesa.callbacks.validation_url')),
         ]);
-    }
-
-    /**
-     * Fail loudly when a value M-PESA needs has not been configured.
-     *
-     * @throws MpesaException
-     */
-    protected function required(mixed $value, string $key): string
-    {
-        if (blank($value)) {
-            throw MpesaException::missingConfiguration($key);
-        }
-
-        return (string) $value;
     }
 }
