@@ -16,9 +16,12 @@
         body { font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif; }
         code, pre { font-family: 'IBM Plex Mono', ui-monospace, monospace; }
         a { text-decoration-thickness: 1px; text-underline-offset: 3px; }
+        /* A warm, low-contrast page: easier to read a long document on than white. */
+        pre { background: #2b2926; }
+        ::selection { background: #cfe8da; }
     </style>
 </head>
-<body class="bg-stone-50 text-[15px] leading-relaxed text-stone-800 antialiased">
+<body class="bg-[#edeae3] text-[15px] leading-relaxed text-stone-700 antialiased">
     {{ $slot }}
 </body>
 </html>
