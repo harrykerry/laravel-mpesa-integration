@@ -23,6 +23,9 @@ use Illuminate\Database\Eloquent\Model;
     'amount',
     'msisdn',
     'business_shortcode',
+    'result_code',
+    'result_desc',
+    'completed_at',
 ])]
 class MpesaStkPayment extends Model
 {
@@ -38,6 +41,8 @@ class MpesaStkPayment extends Model
     {
         return [
             'amount' => 'integer',
+            'result_code' => 'integer',
+            'completed_at' => 'immutable_datetime',
         ];
     }
 
@@ -54,7 +59,7 @@ class MpesaStkPayment extends Model
                 $value instanceof DateTimeInterface => $value->format('YmdHis'),
                 default => $value === null ? null : (string) $value,
             },
-        )->shouldCache();
+        );
     }
 
     /**
@@ -63,6 +68,18 @@ class MpesaStkPayment extends Model
     protected function isPaid(): Attribute
     {
         return Attribute::get(fn (): bool => filled($this->transaction_id));
+    }
+
+    /**
+     * Where the push stands: paid, failed, or still awaiting a callback.
+     */
+    protected function status(): Attribute
+    {
+        return Attribute::get(fn (): string => match (true) {
+            filled($this->transaction_id) => 'paid',
+            $this->result_code !== null && $this->result_code !== 0 => 'failed',
+            default => 'pending',
+        });
     }
 
     /**
@@ -84,7 +101,19 @@ class MpesaStkPayment extends Model
     #[Scope]
     protected function awaitingCallback(Builder $query): void
     {
-        $query->whereNull('transaction_id');
+        $query->whereNull('transaction_id')
+            ->where(fn (Builder $query) => $query->whereNull('result_code')->orWhere('result_code', 0));
+    }
+
+    /**
+     * Scope the query to pushes M-PESA reported as not completed.
+     *
+     * @param  Builder<$this>  $query
+     */
+    #[Scope]
+    protected function unsuccessful(Builder $query): void
+    {
+        $query->whereNull('transaction_id')->where('result_code', '!=', 0);
     }
 
     /**

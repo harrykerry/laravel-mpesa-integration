@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Enums\C2bRejection;
 use Illuminate\Contracts\Validation\Validator;
 use Illuminate\Http\JsonResponse;
 use Symfony\Component\HttpFoundation\Response as HttpStatus;
@@ -79,16 +80,39 @@ class ApiResponse
     }
 
     /**
-     * The acknowledgement M-PESA expects from a callback endpoint.
+     * The acknowledgement M-PESA expects from a callback it does not wait on.
      *
-     * M-PESA retries anything that is not a 200 with a zero result code, so
-     * a callback is acknowledged even when our own processing is deferred.
+     * M-PESA resends anything it does not get a zero result code for, so a
+     * callback is acknowledged as soon as it is recorded, before the queued
+     * job that processes it has run.
      */
     public static function acknowledge(string $description = 'Accepted'): JsonResponse
     {
         return response()->json([
             'ResultCode' => 0,
             'ResultDesc' => $description,
+        ]);
+    }
+
+    /**
+     * Tell M-PESA to complete a C2B payment it is holding.
+     */
+    public static function acceptPayment(): JsonResponse
+    {
+        return response()->json([
+            'ResultCode' => 0,
+            'ResultDesc' => 'Accepted',
+        ]);
+    }
+
+    /**
+     * Tell M-PESA to stop a C2B payment, so the customer is not deducted.
+     */
+    public static function rejectPayment(C2bRejection $rejection): JsonResponse
+    {
+        return response()->json([
+            'ResultCode' => $rejection->value,
+            'ResultDesc' => $rejection->description(),
         ]);
     }
 }

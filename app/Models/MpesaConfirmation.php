@@ -63,7 +63,7 @@ class MpesaConfirmation extends Model
                 $value instanceof DateTimeInterface => $value->format('YmdHis'),
                 default => $value,
             },
-        )->shouldCache();
+        );
     }
 
     /**

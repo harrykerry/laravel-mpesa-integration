@@ -90,6 +90,30 @@ return [
         ],
 
     ],
+    'rabbitmq' => [
+        'driver' => 'rabbitmq',
+        'hosts' => [
+            [
+                'host' => env('RABBITMQ_HOST', '127.0.0.1'),
+                'port' => (int) env('RABBITMQ_PORT', 5672),
+                'user' => env('RABBITMQ_USER', 'guest'),
+                'password' => env('RABBITMQ_PASSWORD', 'guest'),
+                'vhost' => env('RABBITMQ_VHOST', '/'),
+            ],
+        ],
+        'queue' => env('RABBITMQ_QUEUE', 'default'),
+        'options' => [
+            'ssl_options' => [
+                'verify_peer' => (bool) env('RABBITMQ_SSL_VERIFY_PEER', true),
+                'cafile' => env('RABBITMQ_SSL_CAFILE'),
+            ],
+            'queue' => [
+                'prioritize_delayed' => false,
+                'queue_max_priority' => 10,
+            ],
+        ],
+        'after_commit' => true,
+    ],
 
     /*
     |--------------------------------------------------------------------------

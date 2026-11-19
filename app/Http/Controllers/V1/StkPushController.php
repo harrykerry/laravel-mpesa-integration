@@ -48,7 +48,7 @@ class StkPushController extends Controller
 
         return ApiResponse::success(
             data: $push,
-            message: 'Payment request sent to '.$data['msisdn'].'. '.$push['customer_message'],
+            message: $push['customer_message'],
         );
     }
 }

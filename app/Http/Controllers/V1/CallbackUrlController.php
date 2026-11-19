@@ -49,7 +49,7 @@ class CallbackUrlController extends Controller
 
         return ApiResponse::success(
             data: $registration,
-            message: trim('Callback URLs registered for shortcode '.$registration['shortcode'].'. '.($registration['mpesa_description'] ?? '')),
+            message: $registration['mpesa_description'] ?? 'Callback URLs registered',
         );
     }
 }

@@ -3,11 +3,15 @@
 namespace App\Services;
 
 use App\Exceptions\MpesaException;
+use App\Jobs\ForwardConfirmedPayment;
+use App\Models\MpesaCallback;
 use App\Models\MpesaStkPayment;
 use App\Support\Msisdn;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use RuntimeException;
 use Throwable;
 
 /**
@@ -72,57 +76,106 @@ class MpesaStkService
     /**
      * Record the outcome M-PESA reports for a push we initiated.
      *
-     * @param  array<string, mixed>  $callbackData  The Body.stkCallback payload.
-     * @return array{status: string, message: string}
+     * Runs on the queue: the endpoint has already acknowledged M-PESA. The
+     * push row is locked for the update so two deliveries of the same
+     * callback cannot both write it, and the callback row is marked in the
+     * same transaction as the payment.
+     *
+     * @throws RuntimeException When the push has not been recorded yet, so the job retries.
      */
-    public function handleStkCallbackData(array $callbackData): array
+    public function recordPushOutcome(MpesaCallback $callback): ?MpesaStkPayment
     {
-        $merchantRequestId = (string) ($callbackData['MerchantRequestID'] ?? '');
-        $checkoutRequestId = (string) ($callbackData['CheckoutRequestID'] ?? '');
-        $resultCode = (int) ($callbackData['ResultCode'] ?? -1);
-        $resultDesc = (string) ($callbackData['ResultDesc'] ?? 'No result description');
+        $data = Arr::get($callback->payload, 'Body.stkCallback', []);
+        $merchantRequestId = (string) ($data['MerchantRequestID'] ?? '');
+        $checkoutRequestId = (string) ($data['CheckoutRequestID'] ?? '');
+        $resultCode = (int) ($data['ResultCode'] ?? -1);
+        $resultDesc = (string) ($data['ResultDesc'] ?? 'No result description');
+
+        if ($merchantRequestId === '' || $checkoutRequestId === '') {
+            Log::channel('mpesa')->error('STK_CALLBACK: payload has no request ids, cannot be matched', [
+                'callback_id' => $callback->id,
+            ]);
+
+            $callback->markIgnored('Payload has no MerchantRequestID or CheckoutRequestID');
+
+            return null;
+        }
+
+        $metadata = $this->extractCallbackMetadata($data);
+
+        ['payment' => $payment, 'already_paid' => $alreadyPaid] = DB::transaction(function () use ($callback, $merchantRequestId, $checkoutRequestId, $resultCode, $resultDesc, $metadata): array {
+            $payment = MpesaStkPayment::query()
+                ->forRequest($merchantRequestId, $checkoutRequestId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $payment) {
+                // The push may still be mid-write, so let the job retry.
+                throw new RuntimeException("No STK push recorded for {$checkoutRequestId}");
+            }
+
+            if ($payment->is_paid) {
+                $callback->markIgnored('Push already has a receipt');
+
+                return ['payment' => $payment, 'already_paid' => true];
+            }
+
+            $payment->fill(array_filter([
+                'result_code' => $resultCode,
+                'result_desc' => $resultDesc,
+                'completed_at' => now(),
+                'transaction_id' => $metadata['MpesaReceiptNumber'] ?? null,
+                'transaction_date' => $metadata['TransactionDate'] ?? null,
+                'amount' => $metadata['Amount'] ?? null,
+                'msisdn' => isset($metadata['PhoneNumber'])
+                    ? Msisdn::normalize((string) $metadata['PhoneNumber'])
+                    : null,
+            ], fn ($value) => $value !== null))->save();
+
+            $callback->markProcessed();
+
+            return ['payment' => $payment, 'already_paid' => false];
+        });
+
+        if ($alreadyPaid) {
+            Log::channel('mpesa')->warning('STK_CALLBACK: push already had a receipt, left untouched', [
+                'callback_id' => $callback->id,
+                'checkout_request_id' => $checkoutRequestId,
+                'transaction_id' => $payment->transaction_id,
+            ]);
+
+            return $payment;
+        }
 
         if ($resultCode !== 0) {
-            Log::channel((string) config('mpesa.log_channel'))->warning('STK_CALLBACK: push was not completed', [
-                'merchant_request_id' => $merchantRequestId,
+            Log::channel('mpesa')->warning('STK_CALLBACK: push was not completed', [
+                'callback_id' => $callback->id,
                 'checkout_request_id' => $checkoutRequestId,
                 'result_code' => $resultCode,
                 'result_desc' => $resultDesc,
             ]);
 
-            return ['status' => 'error', 'message' => $resultDesc];
+            return $payment;
         }
 
-        $payment = MpesaStkPayment::query()
-            ->forRequest($merchantRequestId, $checkoutRequestId)
-            ->first();
-
-        if (! $payment) {
-            Log::channel((string) config('mpesa.log_channel'))->error('STK_CALLBACK: no push was recorded for this callback', [
-                'merchant_request_id' => $merchantRequestId,
-                'checkout_request_id' => $checkoutRequestId,
-            ]);
-
-            return ['status' => 'error', 'message' => "Record not found for {$merchantRequestId}"];
-        }
-
-        $metadata = $this->extractCallbackMetadata($callbackData);
-
-        $payment->fill([
-            'transaction_id' => $metadata['MpesaReceiptNumber'] ?? null,
-            'transaction_date' => $metadata['TransactionDate'] ?? null,
-            'amount' => $metadata['Amount'] ?? $payment->amount,
-            'msisdn' => isset($metadata['PhoneNumber'])
-                ? Msisdn::normalize((string) $metadata['PhoneNumber'])
-                : $payment->msisdn,
-        ])->save();
-
-        Log::channel((string) config('mpesa.log_channel'))->info('STK_CALLBACK: payment confirmed', [
-            'transaction_id' => $payment->transaction_id,
+        Log::channel('mpesa')->info('STK_CALLBACK: payment confirmed', [
+            'callback_id' => $callback->id,
             'checkout_request_id' => $checkoutRequestId,
+            'transaction_id' => $payment->transaction_id,
+            'amount' => $payment->amount,
         ]);
 
-        return ['status' => 'success', 'message' => "Entry for {$payment->transaction_id} updated successfully"];
+        ForwardConfirmedPayment::dispatch('stk', [
+            'transaction_id' => $payment->transaction_id,
+            'amount' => $payment->amount,
+            'msisdn' => $payment->msisdn,
+            'business_shortcode' => $payment->business_shortcode,
+            'checkout_request_id' => $payment->checkout_request_id,
+            'merchant_request_id' => $payment->merchant_request_id,
+            'transaction_date' => $payment->transaction_date?->toIso8601String(),
+        ]);
+
+        return $payment;
     }
 
     /**
@@ -156,7 +209,7 @@ class MpesaStkService
 
         // Without both ids the callback could never be matched to this push.
         if (blank($merchantRequestId) || blank($checkoutRequestId)) {
-            Log::channel((string) config('mpesa.log_channel'))->critical('STK: push accepted without request ids, cannot be reconciled', [
+            Log::channel('mpesa')->critical('STK: push accepted without request ids, cannot be reconciled', [
                 'msisdn' => $msisdn,
                 'amount' => $amount,
                 'response' => $response,
@@ -178,7 +231,7 @@ class MpesaStkService
                 ],
             ));
         } catch (Throwable $e) {
-            Log::channel((string) config('mpesa.log_channel'))->critical('STK: push accepted but could not be stored', [
+            Log::channel('mpesa')->critical('STK: push accepted but could not be stored', [
                 'checkout_request_id' => $checkoutRequestId,
                 'merchant_request_id' => $merchantRequestId,
                 'msisdn' => $msisdn,
@@ -189,7 +242,7 @@ class MpesaStkService
             return null;
         }
 
-        Log::channel((string) config('mpesa.log_channel'))->info('STK: push accepted by M-PESA', [
+        Log::channel('mpesa')->info('STK: push accepted by M-PESA', [
             'checkout_request_id' => $checkoutRequestId,
             'msisdn' => $msisdn,
             'amount' => $amount,

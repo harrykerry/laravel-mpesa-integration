@@ -90,7 +90,7 @@ class MpesaAuthService
         }
 
         if ($response->failed()) {
-            Log::channel((string) config('mpesa.log_channel'))->error('AUTH_TOKEN_ERROR', [
+            Log::channel('mpesa')->error('AUTH_TOKEN_ERROR', [
                 'status' => $response->status(),
                 'body' => $response->json() ?? $response->body(),
             ]);
@@ -107,7 +107,7 @@ class MpesaAuthService
             throw MpesaException::authenticationFailed('the token endpoint returned no access token');
         }
 
-        Log::channel((string) config('mpesa.log_channel'))->info('AUTH_TOKEN: token issued', [
+        Log::channel('mpesa')->info('AUTH_TOKEN: token issued', [
             'expires_in' => $response->json('expires_in'),
         ]);
 

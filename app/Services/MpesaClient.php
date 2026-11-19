@@ -48,7 +48,7 @@ class MpesaClient
         $path = $this->endpointPath($endpoint);
         $reference = (string) Str::uuid();
 
-        Log::channel((string) config('mpesa.log_channel'))->info("MPESA_REQUEST: {$endpoint}", [
+        Log::channel('mpesa')->info("MPESA_REQUEST: {$endpoint}", [
             'reference' => $reference,
             'path' => $path,
             'payload' => $this->redactSecrets($payload),
@@ -56,7 +56,7 @@ class MpesaClient
 
         $response = $this->sendRequest($endpoint, fn (PendingRequest $request) => $request->post($path, $payload));
 
-        Log::channel((string) config('mpesa.log_channel'))->info("MPESA_RESPONSE: {$endpoint}", [
+        Log::channel('mpesa')->info("MPESA_RESPONSE: {$endpoint}", [
             'reference' => $reference,
             'status' => $response->status(),
             'body' => $this->redactSecrets((array) $response->json()),
@@ -79,7 +79,7 @@ class MpesaClient
 
         $response = $this->sendRequest($endpoint, fn (PendingRequest $request) => $request->get($path, $query));
 
-        Log::channel((string) config('mpesa.log_channel'))->info("MPESA_RESPONSE: {$endpoint}", [
+        Log::channel('mpesa')->info("MPESA_RESPONSE: {$endpoint}", [
             'status' => $response->status(),
             'body' => $this->redactSecrets((array) $response->json()),
         ]);
@@ -173,7 +173,7 @@ class MpesaClient
         $body = (array) $response->json();
 
         if ($response->failed()) {
-            Log::channel((string) config('mpesa.log_channel'))->error("MPESA_ERROR: {$endpoint}", [
+            Log::channel('mpesa')->error("MPESA_ERROR: {$endpoint}", [
                 'status' => $response->status(),
                 'body' => $this->redactSecrets($body) ?: $response->body(),
             ]);

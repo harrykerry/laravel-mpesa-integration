@@ -208,13 +208,64 @@ return [
 
     /*
     |--------------------------------------------------------------------------
-    | Logging
+    | C2B Validation Rules
     |--------------------------------------------------------------------------
     |
-    | The channel every M-PESA request, response and callback is written to.
+    | M-PESA waits on the validation callback before it deducts a customer.
+    | These settings are the built-in rules; anything else goes in
+    | MpesaC2bValidationService::checks(), which decides accept or reject.
+    |
+    | A rule is skipped when its value is null. Validation only runs at all
+    | if your shortcode is registered for it with Safaricom.
     |
     */
 
-    'log_channel' => env('MPESA_LOG_CHANNEL', 'mpesa'),
+    'validation' => [
+        'enabled' => (bool) env('MPESA_VALIDATION_ENABLED', true),
+        'require_known_shortcode' => (bool) env('MPESA_VALIDATION_REQUIRE_SHORTCODE', true),
+        'require_bill_reference' => (bool) env('MPESA_VALIDATION_REQUIRE_BILL_REF', false),
+        'bill_reference_pattern' => env('MPESA_VALIDATION_BILL_REF_PATTERN'),
+        'min_amount' => env('MPESA_VALIDATION_MIN_AMOUNT'),
+        'max_amount' => env('MPESA_VALIDATION_MAX_AMOUNT'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Queues
+    |--------------------------------------------------------------------------
+    |
+    | Callbacks are acknowledged the moment they arrive and processed by a
+    | queued job, so Safaricom never waits on our database. These settings
+    | choose the connection and queue those jobs run on, and how often a
+    | failed job is retried.
+    |
+    */
+
+    'queue' => [
+        'connection' => env('MPESA_QUEUE_CONNECTION'),
+        'name' => env('MPESA_QUEUE', 'mpesa'),
+        'tries' => (int) env('MPESA_QUEUE_TRIES', 5),
+        'timeout' => (int) env('MPESA_QUEUE_TIMEOUT', 30),
+        'backoff' => array_map('intval', explode(',', (string) env('MPESA_QUEUE_BACKOFF', '10,30,60,300,900'))),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Outgoing Callbacks (Forwarding)
+    |--------------------------------------------------------------------------
+    |
+    | Once a payment is confirmed it can be forwarded to another system over
+    | HTTP, on the queue, with the same retry behaviour. Each delivery is
+    | signed with an HMAC of the body in the X-Mpesa-Signature header so the
+    | receiver can verify it. Leave the URL unset to forward nothing.
+    |
+    */
+
+    'forwarding' => [
+        'url' => env('MPESA_FORWARD_URL'),
+        'secret' => env('MPESA_FORWARD_SECRET'),
+        'timeout' => (int) env('MPESA_FORWARD_TIMEOUT', 15),
+        'tries' => (int) env('MPESA_FORWARD_TRIES', 5),
+    ],
 
 ];
